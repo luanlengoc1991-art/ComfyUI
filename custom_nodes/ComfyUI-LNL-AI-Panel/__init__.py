@@ -10,6 +10,8 @@ import os
 import shutil
 import subprocess
 import threading
+import glob
+import time
 import uuid
 
 from aiohttp import web
@@ -44,6 +46,52 @@ def _claude_exe():
     return cand if os.path.exists(cand) else None
 
 
+def _codex_exe():
+    """Codex CLI (đăng nhập ChatGPT). Ưu tiên codex.exe gốc để tránh lỗi trích dẫn của .cmd."""
+    roots = [os.path.join(os.environ.get("APPDATA", ""), "npm", "node_modules", "@openai")]
+    for r in roots:
+        hits = glob.glob(os.path.join(r, "**", "codex.exe"), recursive=True)
+        if hits:
+            return sorted(hits, key=len)[0]
+    return shutil.which("codex")
+
+
+def _account_env():
+    """Chỉ dùng tài khoản đăng nhập của máy (hạn mức tháng Claude / ChatGPT), không dùng API key tính tiền theo token."""
+    env = dict(os.environ)
+    for k in ("PYTHONPATH", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"):
+        env.pop(k, None)
+    return env
+
+
+def _codex_to_claude(ev: dict, started: float):
+    """Đổi sự kiện `codex exec --json` sang dạng sự kiện Claude mà giao diện đã hiểu."""
+    t = ev.get("type")
+    if t == "thread.started":
+        return [{"type": "system", "session_id": ev.get("thread_id")}]
+    item = ev.get("item") or {}
+    it = item.get("type")
+    if t == "item.started" and it == "command_execution":
+        return [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "shell", "input": {"command": item.get("command")}}]}}]
+    if t == "item.started" and it == "mcp_tool_call":
+        return [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": f"{item.get('server')}.{item.get('tool')}", "input": item.get("arguments") or {}}]}}]
+    if t == "item.started" and it == "file_change":
+        return [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "edit", "input": {"files": [c.get("path") for c in item.get("changes") or []]}}]}}]
+    if t == "item.completed" and it == "mcp_tool_call":
+        res = item.get("result") or {}
+        text = "\n".join(c.get("text", "") for c in res.get("content") or [] if isinstance(c, dict))
+        return [{"type": "user", "message": {"content": [{"type": "tool_result", "content": text}]}}]
+    if t == "item.completed" and it == "agent_message":
+        return [{"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "text_delta", "text": item.get("text", "")}}},
+                {"type": "stream_event", "event": {"type": "message_stop"}}]
+    if t == "turn.completed":
+        return [{"type": "result", "duration_ms": int((time.time() - started) * 1000), "usage": ev.get("usage")}]
+    if t in ("turn.failed", "error"):
+        msg = (ev.get("error") or {}).get("message") if t == "turn.failed" else ev.get("message")
+        return [{"type": "lnl_error", "text": msg or "Codex lỗi"}]
+    return []
+
+
 def _guard(request: web.Request):
     # Header riêng buộc trình duyệt preflight → trang web lạ không gọi được (không có CORS).
     if request.headers.get("X-LNL-AI") != "1":
@@ -69,7 +117,7 @@ routes = PromptServer.instance.routes
 @routes.get("/lnl-ai/info")
 async def info(request):
     _guard(request)
-    return web.json_response({"claude": _claude_exe(), "root": COMFY_ROOT, "running": len(RUNS)})
+    return web.json_response({"claude": _claude_exe(), "codex": _codex_exe(), "root": COMFY_ROOT, "running": len(RUNS)})
 
 
 @routes.post("/lnl-ai/canvas")
@@ -119,22 +167,43 @@ async def chat(request):
     message = (body.get("message") or "").strip()
     if not message:
         return web.json_response({"error": "Thiếu nội dung"}, status=400)
-    exe = _claude_exe()
-    if not exe:
-        return web.json_response({"error": "Không tìm thấy Claude Code (claude.exe). Cài Claude Code rồi thử lại."}, status=500)
-
-    mode = body.get("mode") if body.get("mode") in MODES else "auto"
-    args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-            "--permission-mode", mode, "--append-system-prompt", SYSTEM_PROMPT]
+    agent = "codex" if body.get("agent") == "codex" else "claude"
     sid = body.get("session_id")
-    if isinstance(sid, str) and sid.replace("-", "").isalnum():
-        args += ["--resume", sid]
+    sid = sid if isinstance(sid, str) and sid.replace("-", "").isalnum() else None
     model = body.get("model")
-    if isinstance(model, str) and model.replace("-", "").replace(".", "").isalnum():
-        args += ["--model", model]
+    model = model if isinstance(model, str) and model.replace("-", "").replace(".", "").isalnum() else None
+    mode = body.get("mode") if body.get("mode") in MODES else "auto"
 
-    env = dict(os.environ)
-    env.pop("PYTHONPATH", None)
+    if agent == "claude":
+        exe = _claude_exe()
+        if not exe:
+            return web.json_response({"error": "Không tìm thấy Claude Code (claude.exe). Cài Claude Code rồi thử lại."}, status=500)
+        args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+                "--permission-mode", mode, "--append-system-prompt", SYSTEM_PROMPT]
+        if sid:
+            args += ["--resume", sid]
+        if model:
+            args += ["--model", model]
+    else:
+        exe = _codex_exe()
+        if not exe:
+            return web.json_response({"error": "Chưa cài Codex CLI. Chạy: npm i -g @openai/codex (đăng nhập ChatGPT đã có sẵn trong ~/.codex)."}, status=500)
+        args = [exe, "exec", "--json", "--skip-git-repo-check", "-C", COMFY_ROOT]
+        if mode == "bypassPermissions":
+            args += ["--dangerously-bypass-approvals-and-sandbox"]
+        elif mode == "plan":
+            args += ["--sandbox", "read-only"]
+        else:
+            args += ["--full-auto"]
+        if model:
+            args += ["-m", model]
+        if sid:
+            args += ["resume", sid]
+        else:
+            message = SYSTEM_PROMPT.replace("Claude Code", "Codex") + "\n\n---\n" + message
+        args += ["-"]
+
+    env = _account_env()
     proc = subprocess.Popen(args, cwd=COMFY_ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=env,
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
@@ -159,6 +228,8 @@ async def chat(request):
     threading.Thread(target=pump_out, daemon=True).start()
     threading.Thread(target=pump_err, daemon=True).start()
 
+    started = time.time()
+    codex_sid = sid
     resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store"})
     await resp.prepare(request)
     try:
@@ -167,11 +238,23 @@ async def chat(request):
             line = await q.get()
             if line is None:
                 break
+            if agent == "codex":
+                try:
+                    ev = json.loads(line)
+                except ValueError:
+                    continue
+                for out in _codex_to_claude(ev, started):
+                    if out["type"] == "system":
+                        codex_sid = out.get("session_id") or codex_sid
+                    elif out["type"] == "result":
+                        out["session_id"] = codex_sid
+                    await resp.write((json.dumps(out, ensure_ascii=False) + "\n").encode("utf-8"))
+                continue
             await resp.write(line if line.endswith(b"\n") else line + b"\n")
         rc = await loop.run_in_executor(None, proc.wait)
         if rc != 0:
             tail = b"".join(err_chunks).decode("utf-8", "replace")[-2000:]
-            await resp.write((json.dumps({"type": "lnl_error", "code": rc, "text": tail or f"Claude thoát với mã {rc}"}) + "\n").encode())
+            await resp.write((json.dumps({"type": "lnl_error", "code": rc, "text": tail or f"{agent} thoát với mã {rc}"}) + "\n").encode())
         await resp.write_eof()
     except (ConnectionResetError, asyncio.CancelledError):
         _kill(proc)

@@ -55,4 +55,6 @@ git fetch upstream; git merge upstream/master; git push
 - Chạy Claude Code CLI bằng tài khoản Claude của máy (cùng skill, MCP, quy tắc như trong Cursor), thư mục làm việc là ComfyUI.
 - Chọn chế độ quyền (Tự động / Tự sửa file / Toàn quyền / Chỉ lập kế hoạch) và model; "+ Mới" để bắt đầu phiên mới, phiên cũ được nhớ.
 - Canvas đang mở được chia sẻ cho AI qua MCP `comfyui_get_canvas`; AI đưa workflow lên canvas bằng `comfyui_load_canvas`.
-- Yêu cầu: đã cài Claude Code (`claude`) và đăng ký MCP `comfyui` (mục ở trên).
+- Ô trên cùng chọn AI: **Claude Code (tài khoản Claude)** hoặc **Codex (tài khoản ChatGPT)**. Cả hai chỉ chạy bằng đăng nhập của máy (hạn mức gói tháng); khung tự bỏ `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` để không tính tiền theo token. Mỗi AI nhớ phiên riêng; tiếp tục phiên giúp tận dụng cache, tốn ít token hơn.
+- Khung tự mở khi vào app; biểu tượng có chữ "AI". Tắt tự mở: `localStorage.setItem("lnl-ai-autoopen","0")`.
+- Yêu cầu: đã cài Claude Code (`claude`), với Codex thì `npm i -g @openai/codex` (đăng nhập ChatGPT trong `~/.codex`), và đăng ký MCP `comfyui` (mục ở trên).

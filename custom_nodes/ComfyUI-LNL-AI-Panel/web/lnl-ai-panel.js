@@ -4,7 +4,8 @@ import { api } from "../../scripts/api.js";
 
 const H = { "Content-Type": "application/json", "X-LNL-AI": "1" };
 const LS = "lnl-ai-state-v1";
-const state = Object.assign({ sessionId: null, mode: "auto", model: "", history: [] }, JSON.parse(localStorage.getItem(LS) || "{}"));
+const state = Object.assign({ agent: "claude", sessions: {}, mode: "auto", model: "", history: [] }, JSON.parse(localStorage.getItem(LS) || "{}"));
+if (state.sessionId) { state.sessions.claude = state.sessionId; delete state.sessionId; }
 const save = () => localStorage.setItem(LS, JSON.stringify({ ...state, history: state.history.slice(-80) }));
 
 const CSS = `
@@ -75,28 +76,30 @@ function render(root) {
   root.innerHTML = "";
   const wrap = el("div", "lnl-ai");
   const top = el("div", "lnl-ai-top");
-  const title = el("b", null, "Claude Code"); title.style.cssText = "flex:1 0 100%;white-space:nowrap";
+  const title = el("select"); title.title = "Chọn AI — chạy bằng tài khoản đăng nhập của máy (hạn mức tháng)";
+  for (const [v, t] of [["claude", "Claude Code (tài khoản Claude)"], ["codex", "Codex (tài khoản ChatGPT)"]]) { const o = el("option", null, t); o.value = v; title.appendChild(o); }
+  title.value = state.agent; title.style.cssText = "flex:1 0 100%;font-weight:600";
   const mode = el("select");
   for (const [v, t] of [["auto", "Tự động"], ["acceptEdits", "Tự sửa file"], ["bypassPermissions", "Toàn quyền"], ["plan", "Chỉ lập kế hoạch"]]) {
     const o = el("option", null, t); o.value = v; mode.appendChild(o);
   }
   mode.value = state.mode; mode.onchange = () => { state.mode = mode.value; save(); };
   const model = el("select");
-  for (const [v, t] of [["", "Model mặc định"], ["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"]]) {
-    const o = el("option", null, t); o.value = v; model.appendChild(o);
-  }
-  model.value = state.model; model.onchange = () => { state.model = model.value; save(); };
+  const MODELS = { claude: [["", "Model mặc định"], ["opus", "Opus"], ["sonnet", "Sonnet (tiết kiệm)"], ["haiku", "Haiku (rẻ nhất)"]], codex: [["", "Model mặc định"]] };
+  const fillModels = () => { model.innerHTML = ""; for (const [v, t] of MODELS[state.agent]) { const o = el("option", null, t); o.value = v; model.appendChild(o); } if (![...model.options].some((o) => o.value === state.model)) state.model = ""; model.value = state.model; };
+  fillModels();
+  title.onchange = () => { state.agent = title.value; fillModels(); save(); status.textContent = state.sessions[state.agent] ? "Đang tiếp tục phiên trước" : ""; ta.placeholder = `Nhập lệnh cho ${state.agent === "codex" ? "Codex" : "Claude"}…`; }; model.onchange = () => { state.model = model.value; save(); };
   const btnNew = el("button", null, "+ Mới"); btnNew.title = "Cuộc trò chuyện mới";
-  btnNew.onclick = () => { state.sessionId = null; state.history = []; save(); log.innerHTML = ""; hint(); };
+  btnNew.onclick = () => { state.sessions = {}; state.history = []; save(); log.innerHTML = ""; hint(); };
   top.append(title, mode, model, btnNew);
 
   const log = el("div", "lnl-ai-log");
   const hint = () => { if (!log.children.length) log.appendChild(el("div", "lnl-ai-tool", "Ra lệnh như trong Cursor: tạo ảnh, dựng/sửa workflow trên canvas, cài model, sửa code… Ctrl+Enter để gửi.")); };
 
   const inBox = el("div", "lnl-ai-in");
-  const ta = el("textarea"); ta.placeholder = "Nhập lệnh cho Claude…";
+  const ta = el("textarea"); ta.placeholder = `Nhập lệnh cho ${state.agent === "codex" ? "Codex" : "Claude"}…`;
   const row = el("div", "lnl-ai-row");
-  const status = el("span", null, state.sessionId ? "Đang tiếp tục phiên trước" : "");
+  const status = el("span", null, state.sessions[state.agent] ? "Đang tiếp tục phiên trước" : "");
   const send = el("button", "lnl-ai-send", "Gửi");
   row.append(status, send); inBox.append(ta, row);
   wrap.append(top, log, inBox); root.appendChild(wrap);
@@ -113,12 +116,13 @@ function render(root) {
     if (log.firstChild?.className === "lnl-ai-tool" && state.history.length === 0) log.innerHTML = "";
     ta.value = ""; addMsg("user", text); state.history.push({ role: "user", text }); save();
     await syncCanvas();
-    send.textContent = "Dừng"; status.textContent = "Claude đang làm…"; running = "pending";
+    send.textContent = "Dừng"; const agent = state.agent; const who = agent === "codex" ? "Codex" : "Claude";
+    status.textContent = who + " đang làm…"; running = "pending";
     let cur = null, curText = "";
     const flush = () => { if (cur && curText) { state.history.push({ role: "ai", text: curText }); addImages(cur, curText); } cur = null; curText = ""; };
     try {
       const res = await fetch(api.apiURL("/lnl-ai/chat"), { method: "POST", headers: H,
-        body: JSON.stringify({ message: text, session_id: state.sessionId, mode: state.mode, model: state.model || undefined }) });
+        body: JSON.stringify({ agent, message: text, session_id: state.sessions[agent], mode: state.mode, model: state.model || undefined }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -130,7 +134,7 @@ function render(root) {
           if (!line) continue;
           let ev; try { ev = JSON.parse(line); } catch { continue; }
           if (ev.type === "lnl_run") running = ev.run_id;
-          else if (ev.type === "system" && ev.session_id) { state.sessionId = ev.session_id; save(); }
+          else if (ev.type === "system" && ev.session_id) { state.sessions[agent] = ev.session_id; save(); }
           else if (ev.type === "stream_event") {
             const d = ev.event;
             if (d?.type === "content_block_delta" && d.delta?.type === "text_delta") {
@@ -154,7 +158,7 @@ function render(root) {
             }
           } else if (ev.type === "result") {
             flush();
-            if (ev.session_id) state.sessionId = ev.session_id;
+            if (ev.session_id) state.sessions[agent] = ev.session_id;
             status.textContent = `Xong · ${Math.round((ev.duration_ms || 0) / 1000)}s`;
             if (ev.is_error && ev.result) addMsg("err", ev.result);
           } else if (ev.type === "lnl_error") { flush(); addMsg("err", ev.text); status.textContent = "Lỗi"; }
@@ -162,7 +166,7 @@ function render(root) {
       }
     } catch (err) { flush(); addMsg("err", String(err.message || err)); status.textContent = "Lỗi"; }
     flush(); save(); running = null; send.textContent = "Gửi";
-    if (status.textContent === "Claude đang làm…") status.textContent = "Đã dừng";
+    if (status.textContent.endsWith("đang làm…")) status.textContent = "Đã dừng";
   }
   send.onclick = run;
   ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } e.stopPropagation(); });
@@ -176,5 +180,18 @@ app.registerExtension({
       id: "lnl-ai", icon: "pi pi-sparkles", title: "AI", tooltip: "Ra lệnh AI (Claude Code)", type: "custom",
       render: (container) => render(container),
     });
+    // Cho dễ thấy: chữ "AI" dưới biểu tượng + tự mở khung khi vào app. Không chặn khởi động (không await).
+    const css = el("style"); css.textContent = `
+      .side-bar-button:has(.pi-sparkles){position:relative;color:#ffd166!important}
+      .side-bar-button:has(.pi-sparkles)::after{content:"AI";position:absolute;left:0;right:0;bottom:2px;font-size:10px;font-weight:700;text-align:center;line-height:1}`;
+    document.head.appendChild(css);
+    let tries = 0;
+    const t = setInterval(() => {
+      const btn = document.querySelector(".pi-sparkles")?.closest("button");
+      if (btn || ++tries > 240) {
+        clearInterval(t);
+        if (btn && !document.querySelector(".lnl-ai") && localStorage.getItem("lnl-ai-autoopen") !== "0") setTimeout(() => { if (!document.querySelector(".lnl-ai")) btn.click(); }, 800);
+      }
+    }, 250);
   },
 });
