@@ -144,6 +144,16 @@ const TOOLS = [
     description: 'Trạng thái ComfyUI: đang chạy chưa, GPU/VRAM, hàng đợi.',
     inputSchema: { type: 'object', properties: { start: { type: 'boolean', description: 'Mở ComfyUI nếu chưa chạy' } } },
   },
+  {
+    name: 'comfyui_get_canvas',
+    description: 'Đọc workflow người dùng đang mở trên canvas ComfyUI (cần cửa sổ ComfyUI đang mở). Trả về {api: định dạng API để chạy/sửa, ui: định dạng giao diện}.',
+    inputSchema: { type: 'object', properties: { include_ui: { type: 'boolean', description: 'Kèm cả định dạng UI (dài). Mặc định false.' } } },
+  },
+  {
+    name: 'comfyui_load_canvas',
+    description: 'Đưa một workflow lên canvas ComfyUI để người dùng thấy và sửa tiếp (định dạng API hoặc UI). Không tự chạy.',
+    inputSchema: { type: 'object', properties: { workflow: { type: 'object' }, name: { type: 'string' } }, required: ['workflow'] },
+  },
 ];
 
 async function callTool(name, a = {}) {
@@ -169,6 +179,15 @@ async function callTool(name, a = {}) {
     try { r = await runPrompt(wf); } catch (e) { if (!e.interrupted) throw e; r = await runPrompt(wf); }
     const extra = a.return_image === false ? [] : r.files.slice(0, 2).map(imageContent).filter(Boolean);
     return { text: JSON.stringify({ files: r.files, seconds: r.seconds, seed, checkpoint: ckpt }, null, 2), extra };
+  }
+  if (name === 'comfyui_get_canvas') {
+    const c = await api('/lnl-ai/canvas', { headers: { 'X-LNL-AI': '1' } });
+    return { text: JSON.stringify(a.include_ui ? c : { api: c.api, nodes: c.ui?.nodes?.length, at: c.at }, null, 2) };
+  }
+  if (name === 'comfyui_load_canvas') {
+    if (!a.workflow || typeof a.workflow !== 'object') throw new Error('Thiếu workflow');
+    const r = await api('/lnl-ai/canvas/load', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-LNL-AI': '1' }, body: JSON.stringify({ workflow: a.workflow, name: a.name }) });
+    return { text: r.clients ? 'Đã đưa workflow lên canvas.' : 'Chưa có cửa sổ ComfyUI nào đang mở để hiện workflow.' };
   }
   if (name === 'comfyui_run_workflow') {
     const r = await runPrompt(a.workflow, a.timeout_sec ?? 900);

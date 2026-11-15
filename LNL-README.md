@@ -49,3 +49,10 @@ tool_timeout_sec = 900
 ```powershell
 git fetch upstream; git merge upstream/master; git push
 ```
+
+## Khung "AI" trong ComfyUI (ra lệnh Claude Code ngay trong app)
+- Custom node `custom_nodes/ComfyUI-LNL-AI-Panel`: tab **AI** (biểu tượng ✨) ở thanh bên trái.
+- Chạy Claude Code CLI bằng tài khoản Claude của máy (cùng skill, MCP, quy tắc như trong Cursor), thư mục làm việc là ComfyUI.
+- Chọn chế độ quyền (Tự động / Tự sửa file / Toàn quyền / Chỉ lập kế hoạch) và model; "+ Mới" để bắt đầu phiên mới, phiên cũ được nhớ.
+- Canvas đang mở được chia sẻ cho AI qua MCP `comfyui_get_canvas`; AI đưa workflow lên canvas bằng `comfyui_load_canvas`.
+- Yêu cầu: đã cài Claude Code (`claude`) và đăng ký MCP `comfyui` (mục ở trên).
