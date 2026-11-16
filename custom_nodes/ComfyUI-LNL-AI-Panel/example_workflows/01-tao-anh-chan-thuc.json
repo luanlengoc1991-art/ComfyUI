@@ -1,0 +1,547 @@
+{
+ "id": "4beac61e-0638-486a-a4d9-bfaabe98c314",
+ "revision": 0,
+ "last_node_id": 0,
+ "last_link_id": 9,
+ "nodes": [
+  {
+   "id": "ck",
+   "type": "CheckpointLoaderSimple",
+   "pos": [
+    100,
+    130
+   ],
+   "size": [
+    270,
+    98
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "ckpt_name",
+     "name": "ckpt_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "ckpt_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "MODEL",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      3
+     ]
+    },
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      1,
+      2
+     ]
+    },
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      8
+     ]
+    }
+   ],
+   "title": "Model ảnh chân thực",
+   "properties": {
+    "Node name for S&R": "CheckpointLoaderSimple"
+   },
+   "widgets_values": [
+    "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   ],
+   "widgets_values_named": {
+    "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   }
+  },
+  {
+   "id": "pos",
+   "type": "CLIPTextEncode",
+   "pos": [
+    470,
+    130
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      4
+     ]
+    }
+   ],
+   "title": "Mô tả ảnh (tiếng Anh)",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "photo of a young asian woman in a modern cafe, natural light, realistic skin, 85mm, sharp focus, 4k"
+   ],
+   "widgets_values_named": {
+    "text": "photo of a young asian woman in a modern cafe, natural light, realistic skin, 85mm, sharp focus, 4k"
+   }
+  },
+  {
+   "id": "neg",
+   "type": "CLIPTextEncode",
+   "pos": [
+    470,
+    460
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      5
+     ]
+    }
+   ],
+   "title": "Không muốn có",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   ],
+   "widgets_values_named": {
+    "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   }
+  },
+  {
+   "id": "lat",
+   "type": "EmptyLatentImage",
+   "pos": [
+    100,
+    358
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      6
+     ]
+    }
+   ],
+   "title": "Khung ảnh 9:16",
+   "properties": {
+    "Node name for S&R": "EmptyLatentImage"
+   },
+   "widgets_values": [
+    832,
+    1216,
+    1
+   ],
+   "widgets_values_named": {
+    "width": 832,
+    "height": 1216,
+    "batch_size": 1
+   }
+  },
+  {
+   "id": "ks",
+   "type": "KSampler",
+   "pos": [
+    970,
+    130
+   ],
+   "size": [
+    270,
+    262
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 3
+    },
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 4
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 5
+    },
+    {
+     "localized_name": "latent_image",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 6
+    },
+    {
+     "localized_name": "seed",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      7
+     ]
+    }
+   ],
+   "title": "Tạo ảnh",
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    7,
+    "randomize",
+    28,
+    5,
+    "dpmpp_2m",
+    "karras",
+    1
+   ],
+   "widgets_values_named": {
+    "seed": 7,
+    "control_after_generate": "randomize",
+    "steps": 28,
+    "cfg": 5,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "denoise": 1
+   }
+  },
+  {
+   "id": "dec",
+   "type": "VAEDecode",
+   "pos": [
+    1340,
+    130
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "samples",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 7
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 8
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      9
+     ]
+    }
+   ],
+   "title": "Giải mã ảnh",
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": "save",
+   "type": "SaveImage",
+   "pos": [
+    1580,
+    130
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 9
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "title": "Lưu ảnh",
+   "properties": {},
+   "widgets_values": [
+    "lnl/tao-anh"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "lnl/tao-anh"
+   }
+  }
+ ],
+ "links": [
+  [
+   1,
+   "ck",
+   1,
+   "pos",
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   "ck",
+   1,
+   "neg",
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   "ck",
+   0,
+   "ks",
+   0,
+   "MODEL"
+  ],
+  [
+   4,
+   "pos",
+   0,
+   "ks",
+   1,
+   "CONDITIONING"
+  ],
+  [
+   5,
+   "neg",
+   0,
+   "ks",
+   2,
+   "CONDITIONING"
+  ],
+  [
+   6,
+   "lat",
+   0,
+   "ks",
+   3,
+   "LATENT"
+  ],
+  [
+   7,
+   "ks",
+   0,
+   "dec",
+   0,
+   "LATENT"
+  ],
+  [
+   8,
+   "ck",
+   2,
+   "dec",
+   1,
+   "VAE"
+  ],
+  [
+   9,
+   "dec",
+   0,
+   "save",
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.9,
+   "offset": [
+    416,
+    110
+   ]
+  }
+ },
+ "version": 0.4
+}

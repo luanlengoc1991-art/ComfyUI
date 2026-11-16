@@ -1,0 +1,1019 @@
+{
+ "id": "72a47102-221f-4968-9e97-c8cbf9aa3152",
+ "revision": 0,
+ "last_node_id": 0,
+ "last_link_id": 16,
+ "nodes": [
+  {
+   "id": "ck",
+   "type": "CheckpointLoaderSimple",
+   "pos": [
+    100,
+    130
+   ],
+   "size": [
+    270,
+    98
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "ckpt_name",
+     "name": "ckpt_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "ckpt_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "MODEL",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      10
+     ]
+    },
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      1,
+      2
+     ]
+    },
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      15
+     ]
+    }
+   ],
+   "title": "Model ảnh chân thực",
+   "properties": {
+    "Node name for S&R": "CheckpointLoaderSimple"
+   },
+   "widgets_values": [
+    "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   ],
+   "widgets_values_named": {
+    "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   }
+  },
+  {
+   "id": "pos",
+   "type": "CLIPTextEncode",
+   "pos": [
+    482.798828125,
+    130
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      6
+     ]
+    }
+   ],
+   "title": "Mô tả ảnh (tiếng Anh)",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "photo of a young asian woman in elegant white dress, sunny garden, realistic skin, 4k"
+   ],
+   "widgets_values_named": {
+    "text": "photo of a young asian woman in elegant white dress, sunny garden, realistic skin, 4k"
+   }
+  },
+  {
+   "id": "neg",
+   "type": "CLIPTextEncode",
+   "pos": [
+    482.798828125,
+    460
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      7
+     ]
+    }
+   ],
+   "title": "Không muốn có",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   ],
+   "widgets_values_named": {
+    "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   }
+  },
+  {
+   "id": "img",
+   "type": "LoadImage",
+   "pos": [
+    100,
+    358
+   ],
+   "size": [
+    282.798828125,
+    314
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      3
+     ]
+    },
+    {
+     "localized_name": "MASK",
+     "name": "MASK",
+     "type": "MASK",
+     "links": null
+    }
+   ],
+   "title": "Ảnh mẫu bố cục / tư thế",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "lnl-mau-nhanvat.jpg",
+    "image"
+   ],
+   "widgets_values_named": {
+    "image": "lnl-mau-nhanvat.jpg",
+    "upload": "image"
+   }
+  },
+  {
+   "id": "sm",
+   "type": "ImageScale",
+   "pos": [
+    482.798828125,
+    790
+   ],
+   "size": [
+    270,
+    130
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 3
+    },
+    {
+     "localized_name": "upscale_method",
+     "name": "upscale_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "upscale_method"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "crop",
+     "name": "crop",
+     "type": "COMBO",
+     "widget": {
+      "name": "crop"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4
+     ]
+    }
+   ],
+   "title": "Thu nhỏ ảnh mẫu",
+   "properties": {
+    "Node name for S&R": "ImageScale"
+   },
+   "widgets_values": [
+    "bicubic",
+    832,
+    1216,
+    "center"
+   ],
+   "widgets_values_named": {
+    "upscale_method": "bicubic",
+    "width": 832,
+    "height": 1216,
+    "crop": "center"
+   }
+  },
+  {
+   "id": "edge",
+   "type": "Canny",
+   "pos": [
+    982.798828125,
+    130
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4
+    },
+    {
+     "localized_name": "low_threshold",
+     "name": "low_threshold",
+     "type": "FLOAT",
+     "widget": {
+      "name": "low_threshold"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "high_threshold",
+     "name": "high_threshold",
+     "type": "FLOAT",
+     "widget": {
+      "name": "high_threshold"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      9
+     ]
+    }
+   ],
+   "title": "Lấy nét viền",
+   "properties": {
+    "Node name for S&R": "Canny"
+   },
+   "widgets_values": [
+    0.3,
+    0.7
+   ],
+   "widgets_values_named": {
+    "low_threshold": 0.3,
+    "high_threshold": 0.7
+   }
+  },
+  {
+   "id": "cn",
+   "type": "ControlNetLoader",
+   "pos": [
+    100,
+    590
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "control_net_name",
+     "name": "control_net_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "control_net_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONTROL_NET",
+     "name": "CONTROL_NET",
+     "type": "CONTROL_NET",
+     "links": [
+      5
+     ]
+    }
+   ],
+   "title": "ControlNet Union SDXL",
+   "properties": {
+    "Node name for S&R": "ControlNetLoader"
+   },
+   "widgets_values": [
+    "controlnet-union-sdxl-promax.safetensors"
+   ],
+   "widgets_values_named": {
+    "control_net_name": "controlnet-union-sdxl-promax.safetensors"
+   }
+  },
+  {
+   "id": "cnt",
+   "type": "SetUnionControlNetType",
+   "pos": [
+    482.798828125,
+    1050
+   ],
+   "size": [
+    276.5337890625,
+    58
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "control_net",
+     "name": "control_net",
+     "type": "CONTROL_NET",
+     "link": 5
+    },
+    {
+     "localized_name": "type",
+     "name": "type",
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONTROL_NET",
+     "name": "CONTROL_NET",
+     "type": "CONTROL_NET",
+     "links": [
+      8
+     ]
+    }
+   ],
+   "title": "Kiểu điều khiển",
+   "properties": {
+    "Node name for S&R": "SetUnionControlNetType"
+   },
+   "widgets_values": [
+    "canny/lineart/anime_lineart/mlsd"
+   ],
+   "widgets_values_named": {
+    "type": "canny/lineart/anime_lineart/mlsd"
+   }
+  },
+  {
+   "id": "apply",
+   "type": "ControlNetApplyAdvanced",
+   "pos": [
+    1352.798828125,
+    130
+   ],
+   "size": [
+    270,
+    186
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 6
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 7
+    },
+    {
+     "localized_name": "control_net",
+     "name": "control_net",
+     "type": "CONTROL_NET",
+     "link": 8
+    },
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 9
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "localized_name": "strength",
+     "name": "strength",
+     "type": "FLOAT",
+     "widget": {
+      "name": "strength"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "start_percent",
+     "name": "start_percent",
+     "type": "FLOAT",
+     "widget": {
+      "name": "start_percent"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "end_percent",
+     "name": "end_percent",
+     "type": "FLOAT",
+     "widget": {
+      "name": "end_percent"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      11
+     ]
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "links": [
+      12
+     ]
+    }
+   ],
+   "title": "Bám bố cục ảnh mẫu",
+   "properties": {
+    "Node name for S&R": "ControlNetApplyAdvanced"
+   },
+   "widgets_values": [
+    0.6,
+    0,
+    0.8
+   ],
+   "widgets_values_named": {
+    "strength": 0.6,
+    "start_percent": 0,
+    "end_percent": 0.8
+   }
+  },
+  {
+   "id": "lat",
+   "type": "EmptyLatentImage",
+   "pos": [
+    100,
+    778
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      13
+     ]
+    }
+   ],
+   "title": "Khung ảnh 9:16",
+   "properties": {
+    "Node name for S&R": "EmptyLatentImage"
+   },
+   "widgets_values": [
+    832,
+    1216,
+    1
+   ],
+   "widgets_values_named": {
+    "width": 832,
+    "height": 1216,
+    "batch_size": 1
+   }
+  },
+  {
+   "id": "ks",
+   "type": "KSampler",
+   "pos": [
+    1722.798828125,
+    130
+   ],
+   "size": [
+    270,
+    262
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 10
+    },
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 11
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 12
+    },
+    {
+     "localized_name": "latent_image",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 13
+    },
+    {
+     "localized_name": "seed",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      14
+     ]
+    }
+   ],
+   "title": "Tạo ảnh",
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    7,
+    "randomize",
+    28,
+    5,
+    "dpmpp_2m",
+    "karras",
+    1
+   ],
+   "widgets_values_named": {
+    "seed": 7,
+    "control_after_generate": "randomize",
+    "steps": 28,
+    "cfg": 5,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "denoise": 1
+   }
+  },
+  {
+   "id": "dec",
+   "type": "VAEDecode",
+   "pos": [
+    2092.798828125,
+    130
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "samples",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 14
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 15
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      16
+     ]
+    }
+   ],
+   "title": "Giải mã ảnh",
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": "save",
+   "type": "SaveImage",
+   "pos": [
+    2332.798828125,
+    130
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 16
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "title": "Lưu ảnh",
+   "properties": {},
+   "widgets_values": [
+    "lnl/theo-bo-cuc"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "lnl/theo-bo-cuc"
+   }
+  }
+ ],
+ "links": [
+  [
+   1,
+   "ck",
+   1,
+   "pos",
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   "ck",
+   1,
+   "neg",
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   "img",
+   0,
+   "sm",
+   0,
+   "IMAGE"
+  ],
+  [
+   4,
+   "sm",
+   0,
+   "edge",
+   0,
+   "IMAGE"
+  ],
+  [
+   5,
+   "cn",
+   0,
+   "cnt",
+   0,
+   "CONTROL_NET"
+  ],
+  [
+   6,
+   "pos",
+   0,
+   "apply",
+   0,
+   "CONDITIONING"
+  ],
+  [
+   7,
+   "neg",
+   0,
+   "apply",
+   1,
+   "CONDITIONING"
+  ],
+  [
+   8,
+   "cnt",
+   0,
+   "apply",
+   2,
+   "CONTROL_NET"
+  ],
+  [
+   9,
+   "edge",
+   0,
+   "apply",
+   3,
+   "IMAGE"
+  ],
+  [
+   10,
+   "ck",
+   0,
+   "ks",
+   0,
+   "MODEL"
+  ],
+  [
+   11,
+   "apply",
+   0,
+   "ks",
+   1,
+   "CONDITIONING"
+  ],
+  [
+   12,
+   "apply",
+   1,
+   "ks",
+   2,
+   "CONDITIONING"
+  ],
+  [
+   13,
+   "lat",
+   0,
+   "ks",
+   3,
+   "LATENT"
+  ],
+  [
+   14,
+   "ks",
+   0,
+   "dec",
+   0,
+   "LATENT"
+  ],
+  [
+   15,
+   "ck",
+   2,
+   "dec",
+   1,
+   "VAE"
+  ],
+  [
+   16,
+   "dec",
+   0,
+   "save",
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.9,
+   "offset": [
+    416,
+    110
+   ]
+  }
+ },
+ "version": 0.4
+}

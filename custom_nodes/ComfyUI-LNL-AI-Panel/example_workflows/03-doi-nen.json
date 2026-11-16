@@ -1,0 +1,996 @@
+{
+ "id": "93b896c3-e3de-40f6-af1a-4b92ddd994bb",
+ "revision": 0,
+ "last_node_id": 0,
+ "last_link_id": 18,
+ "nodes": [
+  {
+   "id": "ck",
+   "type": "CheckpointLoaderSimple",
+   "pos": [
+    100,
+    130
+   ],
+   "size": [
+    270,
+    98
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "ckpt_name",
+     "name": "ckpt_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "ckpt_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "MODEL",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      4
+     ]
+    },
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      1,
+      2
+     ]
+    },
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      9
+     ]
+    }
+   ],
+   "title": "Model ảnh chân thực",
+   "properties": {
+    "Node name for S&R": "CheckpointLoaderSimple"
+   },
+   "widgets_values": [
+    "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   ],
+   "widgets_values_named": {
+    "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+   }
+  },
+  {
+   "id": "pos",
+   "type": "CLIPTextEncode",
+   "pos": [
+    521.6919921875,
+    130
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      5
+     ]
+    }
+   ],
+   "title": "Mô tả ảnh (tiếng Anh)",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "luxury apartment living room, warm evening light, realistic interior photo, depth of field, 4k"
+   ],
+   "widgets_values_named": {
+    "text": "luxury apartment living room, warm evening light, realistic interior photo, depth of field, 4k"
+   }
+  },
+  {
+   "id": "neg",
+   "type": "CLIPTextEncode",
+   "pos": [
+    521.6919921875,
+    460
+   ],
+   "size": [
+    400,
+    200
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    },
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CONDITIONING",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      6
+     ]
+    }
+   ],
+   "title": "Không muốn có",
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   ],
+   "widgets_values_named": {
+    "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon"
+   }
+  },
+  {
+   "id": "img",
+   "type": "LoadImage",
+   "pos": [
+    100,
+    358
+   ],
+   "size": [
+    282.798828125,
+    314
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      3,
+      14,
+      16
+     ]
+    },
+    {
+     "localized_name": "MASK",
+     "name": "MASK",
+     "type": "MASK",
+     "links": null
+    }
+   ],
+   "title": "Ảnh nhân vật",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "lnl-mau-nhanvat.jpg",
+    "image"
+   ],
+   "widgets_values_named": {
+    "image": "lnl-mau-nhanvat.jpg",
+    "upload": "image"
+   }
+  },
+  {
+   "id": "size",
+   "type": "GetImageSize",
+   "pos": [
+    521.6919921875,
+    790
+   ],
+   "size": [
+    140,
+    66
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "links": [
+      11
+     ]
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "links": [
+      12
+     ]
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "links": null
+    }
+   ],
+   "title": "Kích thước ảnh gốc",
+   "properties": {
+    "Node name for S&R": "GetImageSize"
+   }
+  },
+  {
+   "id": "lat",
+   "type": "EmptyLatentImage",
+   "pos": [
+    100,
+    590
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      7
+     ]
+    }
+   ],
+   "title": "Khung nền mới",
+   "properties": {
+    "Node name for S&R": "EmptyLatentImage"
+   },
+   "widgets_values": [
+    832,
+    1216,
+    1
+   ],
+   "widgets_values_named": {
+    "width": 832,
+    "height": 1216,
+    "batch_size": 1
+   }
+  },
+  {
+   "id": "ks",
+   "type": "KSampler",
+   "pos": [
+    1021.6919921875,
+    130
+   ],
+   "size": [
+    270,
+    262
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 4
+    },
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 5
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 6
+    },
+    {
+     "localized_name": "latent_image",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 7
+    },
+    {
+     "localized_name": "seed",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      8
+     ]
+    }
+   ],
+   "title": "Tạo ảnh",
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    7,
+    "randomize",
+    28,
+    5,
+    "dpmpp_2m",
+    "karras",
+    1
+   ],
+   "widgets_values_named": {
+    "seed": 7,
+    "control_after_generate": "randomize",
+    "steps": 28,
+    "cfg": 5,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "denoise": 1
+   }
+  },
+  {
+   "id": "dec",
+   "type": "VAEDecode",
+   "pos": [
+    1391.6919921875,
+    130
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "samples",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 8
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      10
+     ]
+    }
+   ],
+   "title": "Nền mới",
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": "fit",
+   "type": "ImageScale",
+   "pos": [
+    1631.6919921875,
+    130
+   ],
+   "size": [
+    270,
+    130
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 10
+    },
+    {
+     "localized_name": "upscale_method",
+     "name": "upscale_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "upscale_method"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": 11
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": 12
+    },
+    {
+     "localized_name": "crop",
+     "name": "crop",
+     "type": "COMBO",
+     "widget": {
+      "name": "crop"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      15
+     ]
+    }
+   ],
+   "title": "Khớp cỡ nền với ảnh gốc",
+   "properties": {
+    "Node name for S&R": "ImageScale"
+   },
+   "widgets_values": [
+    "bicubic",
+    512,
+    512,
+    "center"
+   ],
+   "widgets_values_named": {
+    "upscale_method": "bicubic",
+    "width": 512,
+    "height": 512,
+    "crop": "center"
+   }
+  },
+  {
+   "id": "bgm",
+   "type": "LoadBackgroundRemovalModel",
+   "pos": [
+    100,
+    826
+   ],
+   "size": [
+    321.6919921875,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "bg_removal_name",
+     "name": "bg_removal_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "bg_removal_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "bg_model",
+     "name": "bg_model",
+     "type": "BACKGROUND_REMOVAL",
+     "links": [
+      13
+     ]
+    }
+   ],
+   "title": "Model xoá nền (BiRefNet)",
+   "properties": {
+    "Node name for S&R": "LoadBackgroundRemovalModel"
+   },
+   "widgets_values": [
+    "birefnet.safetensors"
+   ],
+   "widgets_values_named": {
+    "bg_removal_name": "birefnet.safetensors"
+   }
+  },
+  {
+   "id": "rm",
+   "type": "RemoveBackground",
+   "pos": [
+    521.6919921875,
+    986
+   ],
+   "size": [
+    181.705078125,
+    46
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "bg_removal_model",
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 13
+    },
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 14
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "mask",
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      17
+     ]
+    }
+   ],
+   "title": "Tách nhân vật",
+   "properties": {
+    "Node name for S&R": "RemoveBackground"
+   }
+  },
+  {
+   "id": "comp",
+   "type": "ImageCompositeMasked",
+   "pos": [
+    2001.6919921875,
+    130
+   ],
+   "size": [
+    271.64609375,
+    146
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "destination",
+     "name": "destination",
+     "type": "IMAGE",
+     "link": 15
+    },
+    {
+     "localized_name": "source",
+     "name": "source",
+     "type": "IMAGE",
+     "link": 16
+    },
+    {
+     "localized_name": "mask",
+     "name": "mask",
+     "shape": 7,
+     "type": "MASK",
+     "link": 17
+    },
+    {
+     "localized_name": "x",
+     "name": "x",
+     "type": "INT",
+     "widget": {
+      "name": "x"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "y",
+     "name": "y",
+     "type": "INT",
+     "widget": {
+      "name": "y"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "resize_source",
+     "name": "resize_source",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "resize_source"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      18
+     ]
+    }
+   ],
+   "title": "Đặt nhân vật lên nền mới",
+   "properties": {
+    "Node name for S&R": "ImageCompositeMasked"
+   },
+   "widgets_values": [
+    0,
+    0,
+    false
+   ],
+   "widgets_values_named": {
+    "x": 0,
+    "y": 0,
+    "resize_source": false
+   }
+  },
+  {
+   "id": "save",
+   "type": "SaveImage",
+   "pos": [
+    2373.3380859375,
+    130
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 18
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "title": "Lưu ảnh đổi nền",
+   "properties": {},
+   "widgets_values": [
+    "lnl/doi-nen"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "lnl/doi-nen"
+   }
+  }
+ ],
+ "links": [
+  [
+   1,
+   "ck",
+   1,
+   "pos",
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   "ck",
+   1,
+   "neg",
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   "img",
+   0,
+   "size",
+   0,
+   "IMAGE"
+  ],
+  [
+   4,
+   "ck",
+   0,
+   "ks",
+   0,
+   "MODEL"
+  ],
+  [
+   5,
+   "pos",
+   0,
+   "ks",
+   1,
+   "CONDITIONING"
+  ],
+  [
+   6,
+   "neg",
+   0,
+   "ks",
+   2,
+   "CONDITIONING"
+  ],
+  [
+   7,
+   "lat",
+   0,
+   "ks",
+   3,
+   "LATENT"
+  ],
+  [
+   8,
+   "ks",
+   0,
+   "dec",
+   0,
+   "LATENT"
+  ],
+  [
+   9,
+   "ck",
+   2,
+   "dec",
+   1,
+   "VAE"
+  ],
+  [
+   10,
+   "dec",
+   0,
+   "fit",
+   0,
+   "IMAGE"
+  ],
+  [
+   11,
+   "size",
+   0,
+   "fit",
+   2,
+   "INT"
+  ],
+  [
+   12,
+   "size",
+   1,
+   "fit",
+   3,
+   "INT"
+  ],
+  [
+   13,
+   "bgm",
+   0,
+   "rm",
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
+   14,
+   "img",
+   0,
+   "rm",
+   1,
+   "IMAGE"
+  ],
+  [
+   15,
+   "fit",
+   0,
+   "comp",
+   0,
+   "IMAGE"
+  ],
+  [
+   16,
+   "img",
+   0,
+   "comp",
+   1,
+   "IMAGE"
+  ],
+  [
+   17,
+   "rm",
+   0,
+   "comp",
+   2,
+   "MASK"
+  ],
+  [
+   18,
+   "comp",
+   0,
+   "save",
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.9,
+   "offset": [
+    416,
+    110
+   ]
+  }
+ },
+ "version": 0.4
+}

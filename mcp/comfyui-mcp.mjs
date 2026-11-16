@@ -154,6 +154,16 @@ const TOOLS = [
     description: 'Đưa một workflow lên canvas ComfyUI để người dùng thấy và sửa tiếp (định dạng API hoặc UI). Không tự chạy.',
     inputSchema: { type: 'object', properties: { workflow: { type: 'object' }, name: { type: 'string' } }, required: ['workflow'] },
   },
+  {
+    name: 'comfyui_download_model',
+    description: 'Tải một model về thư mục models/<folder> của ComfyUI (chạy nền). url phải là https (Hugging Face: dùng link …/resolve/main/<file>). folder: checkpoints, loras, vae, controlnet, upscale_models, clip, clip_vision, text_encoders, diffusion_models, unet, embeddings, background_removal, ipadapter, style_models.',
+    inputSchema: { type: 'object', properties: { url: { type: 'string' }, folder: { type: 'string' }, filename: { type: 'string', description: 'Tên file lưu (mặc định lấy từ link)' } }, required: ['url', 'folder'] },
+  },
+  {
+    name: 'comfyui_download_status',
+    description: 'Xem tiến độ các lượt tải model (đã tải / tổng dung lượng, xong hay lỗi).',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 async function callTool(name, a = {}) {
@@ -192,6 +202,16 @@ async function callTool(name, a = {}) {
   if (name === 'comfyui_run_workflow') {
     const r = await runPrompt(a.workflow, a.timeout_sec ?? 900);
     return { text: JSON.stringify(r, null, 2) };
+  }
+  if (name === 'comfyui_download_model' || name === 'comfyui_download_status') {
+    const H = { 'Content-Type': 'application/json', 'X-LNL-AI': '1' };
+    const r = name === 'comfyui_download_model'
+      ? await fetch(URL_BASE + '/lnl-ai/download', { method: 'POST', headers: H, body: JSON.stringify(a) })
+      : await fetch(URL_BASE + '/lnl-ai/downloads', { headers: H });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    if (Array.isArray(j)) return { text: j.map((d) => `${d.name} (${d.folder}): ${d.state}${d.error ? ' – ' + d.error : ''} · ${(d.done / 1048576).toFixed(0)}/${d.total ? (d.total / 1048576).toFixed(0) : '?'} MB`).join('\n') || 'Chưa có lượt tải nào' };
+    return { text: j.exists ? `Đã có sẵn: ${j.path}` : j.running ? 'Đang tải rồi (id ' + j.id + ')' : 'Bắt đầu tải (id ' + j.id + '). Dùng comfyui_download_status để xem tiến độ.' };
   }
   throw new Error(`Không có tool ${name}`);
 }

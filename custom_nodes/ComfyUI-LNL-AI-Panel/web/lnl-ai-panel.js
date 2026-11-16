@@ -28,10 +28,52 @@ const state = (() => {
   return s;
 })();
 const conv = () => state.convs.find((c) => c.id === state.cur) || state.convs[0];
+let diskTimer = 0;
+const toDisk = () => fetch(api.apiURL("/lnl-ai/state"), { method: "POST", headers: H, body: JSON.stringify(state), keepalive: true }).catch(() => {});
 const save = () => {
   for (const c of state.convs) c.history = c.history.slice(-120);
   state.convs = state.convs.slice(0, MAX_CONVS);
+  state.saved = Date.now();
   try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
+  // Bản chính nằm trên ổ đĩa (user/lnl-ai/state.json): xoá dữ liệu trình duyệt hay đổi trình duyệt vẫn còn.
+  clearTimeout(diskTimer); diskTimer = setTimeout(() => { diskTimer = 0; toDisk(); }, 600);
+};
+// Lấy bản trên ổ đĩa khi mở; bản nào mới hơn thì dùng bản đó (lần đầu: đẩy lịch sử cũ trong trình duyệt lên ổ đĩa).
+async function loadDisk() {
+  try {
+    const r = await fetch(api.apiURL("/lnl-ai/state"), { headers: H });
+    const d = await r.json();
+    const hasLocal = state.convs.some((c) => c.history.length);
+    // Lịch sử trong trình duyệt chưa từng lưu ra ổ đĩa thì giữ nó (đẩy lên), không để bản trên ổ đĩa đè.
+    if (Array.isArray(d.convs) && d.convs.length && (state.saved ? (d.saved || 0) >= state.saved : !hasLocal)) {
+      Object.assign(state, d);
+      if (!state.convs.some((c) => c.id === state.cur)) state.cur = state.convs[0].id;
+      try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
+    } else if (hasLocal) { state.saved = state.saved || Date.now(); try { localStorage.setItem(LS, JSON.stringify(state)); } catch {} toDisk(); }
+  } catch {}
+}
+window.addEventListener("pagehide", () => { if (diskTimer) { clearTimeout(diskTimer); toDisk(); } });
+
+// ---- Báo khi xong (thông báo Windows + tiếng chuông) khi người dùng đang ở cửa sổ khác ----
+let audio = null;
+const chime = () => {
+  try {
+    audio = audio || new AudioContext();
+    const t = audio.currentTime;
+    for (const [i, hz] of [[0, 880], [1, 1320]]) {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = hz; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.0001, t + i * 0.16); g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.16 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.16 + 0.35);
+      o.start(t + i * 0.16); o.stop(t + i * 0.16 + 0.4);
+    }
+  } catch {}
+};
+const askNotify = () => { try { if (state.notify !== false && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} };
+const notify = (title, body) => {
+  if (state.notify === false || (document.hasFocus() && !document.hidden)) return;
+  chime();
+  try { if ("Notification" in window && Notification.permission === "granted") { const n = new Notification(title, { body, tag: "lnl-ai" }); n.onclick = () => { window.focus(); n.close(); }; } } catch {}
 };
 
 const CSS = `
@@ -192,6 +234,7 @@ let MODELS = { claude: [{ id: "", name: "Mặc định của Claude Code", effor
 const EFFORT_VI = { minimal: "Tối thiểu", low: "Thấp", medium: "Vừa", high: "Cao", xhigh: "Rất cao", max: "Tối đa", ultra: "Siêu cao" };
 const AGENTS = [["claude", "Claude Code"], ["codex", "Codex (ChatGPT)"]];
 const TOOLS = [["lean", "Gọn (ít token)"], ["full", "Đầy đủ (mọi MCP/skill)"]];
+const COMPACT_PROMPT = "Tóm tắt cuộc trò chuyện này để tiếp tục ở phiên mới: mục tiêu của người dùng, việc đã làm (file/workflow/node/model cụ thể), quyết định, việc còn dở. Gạch đầu dòng, tối đa 250 từ, không làm thêm việc gì khác.";
 const MODES = [["auto", "Tự động"], ["acceptEdits", "Tự sửa file"], ["bypassPermissions", "Toàn quyền"], ["plan", "Chỉ lập kế hoạch"]];
 
 function build() {
@@ -206,7 +249,9 @@ function build() {
   const bAI = el("button", state.open ? "on" : "", "✨"); bAI.title = "Khung AI (Ctrl+L)";
   const bNew = el("button", "", "＋"); bNew.title = "Cuộc trò chuyện mới";
   const bHist = el("button", "", "🕘"); bHist.title = "Các cuộc trò chuyện";
-  bar.append(bAI, bNew, bHist, el("div", "sp"));
+  const bCompact = el("button", "", "🗜"); bCompact.title = "Tóm gọn cuộc trò chuyện (giảm token cho các tin sau)";
+  const bBell = el("button", state.notify === false ? "" : "on", "🔔"); bBell.title = "Báo khi AI làm xong / ảnh tạo xong (khi bạn đang ở cửa sổ khác)";
+  bar.append(bAI, bNew, bHist, bCompact, el("div", "sp"), bBell);
   dock.append(pane, bar); host.appendChild(dock);
 
   // Kéo mép trái để đổi độ rộng
@@ -299,8 +344,13 @@ function build() {
       else addMsg(h.role, h.text);
     }
     if (!c.history.length) log.appendChild(el("div", "lnl-hint", "Ra lệnh như Claude trong Cursor: tạo ảnh, dựng/sửa workflow trên canvas, cài model, sửa code… Dán hoặc kéo ảnh vào ô để gửi kèm; bấm ◎ để gửi kèm node đang chọn. Ctrl+L mở/đóng khung."));
-    status.textContent = c.sessions[state.agent] ? "Đang tiếp tục phiên trước" : "";
+    status.textContent = c.sessions[state.agent] ? "Đang tiếp tục phiên trước" + ctxText(c) : c.carry ? "Phiên mới, mang theo bản tóm tắt" : "";
     scroll();
+  };
+  const ctxText = (c) => {
+    if (!c.ctx) return "";
+    const k = Math.round(c.ctx / 1000);
+    return ` · ngữ cảnh ${k}k token` + (c.ctx > 120000 ? " (dài — bấm 🗜 để tóm gọn)" : "");
   };
   const renderHist = () => {
     hist.innerHTML = "";
@@ -363,26 +413,31 @@ function build() {
 
   // Gửi / nhận
   let running = null;
-  async function run() {
+  async function run(opts = {}) {
     if (running) { status.textContent = "Đang dừng…"; await fetch(api.apiURL("/lnl-ai/stop"), { method: "POST", headers: H, body: JSON.stringify({ run_id: running }) }).catch(() => {}); return; }
-    const text = ta.value.trim(); if (!text && !attached.length) return;
+    const compact = !!opts.compact;
+    const text = compact ? COMPACT_PROMPT : ta.value.trim(); if (!text && !attached.length) return;
     const c = conv(); const agent = state.agent; const who = agent === "codex" ? "Codex" : "Claude";
+    if (compact && !c.sessions[agent]) { status.textContent = "Chưa có gì để tóm gọn"; return; }
+    askNotify();
     if (!c.history.length) { log.innerHTML = ""; c.title = (text || "Ảnh").slice(0, 60); title.textContent = c.title; }
     c.agent = agent; c.at = Date.now();
     state.convs = [c, ...state.convs.filter((x) => x !== c)];
     let message = text || "Xem ảnh đính kèm.";
+    const carry = !compact && !c.sessions[agent] && c.carry ? c.carry : "";
+    if (carry) message = "[Bản tóm tắt cuộc trò chuyện trước — tiếp tục từ đây]\n" + carry + "\n\n" + message;
     const sel = withSel ? selectedNodes() : [];
     if (sel.length) message += "\n\n[Node đang chọn trên canvas: " + sel.map((n) => `#${n.id} ${n.title} (${n.type})`).join("; ") + "]";
     const images = attached.map((a) => a.path);
-    const shown = text + (attached.length ? `\n📎 ${attached.length} ảnh` : "") + (sel.length ? `\n◎ ${sel.length} node` : "");
+    const shown = (compact ? "🗜 Tóm gọn cuộc trò chuyện" : text) + (attached.length ? `\n📎 ${attached.length} ảnh` : "") + (sel.length ? `\n◎ ${sel.length} node` : "");
     addMsg("user", shown); c.history.push({ role: "user", text: shown });
-    ta.value = ""; grow(); attached = []; withSel = false; bSel.style.color = ""; drawChips(); save();
+    if (!compact) { ta.value = ""; grow(); } attached = []; withSel = false; bSel.style.color = ""; drawChips(); save();
     await syncCanvas();
     go.textContent = "Dừng"; go.classList.add("stop"); running = "pending";
     const t0 = Date.now(); const tick = setInterval(() => { if (running) status.textContent = `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
     status.textContent = who + " đang làm…";
-    let cur = null, curText = ""; const cards = new Map();
-    const flush = () => { if (cur && curText) { c.history.push({ role: "ai", text: curText }); cur.dataset.raw = curText; cur.innerHTML = md(curText); addImages(cur, curText); } cur = null; curText = ""; };
+    let cur = null, curText = "", lastAI = "", ok = false; const cards = new Map();
+    const flush = () => { if (cur && curText) { lastAI = curText; c.history.push({ role: "ai", text: curText }); cur.dataset.raw = curText; cur.innerHTML = md(curText); addImages(cur, curText); } cur = null; curText = ""; };
     let paint = 0;
     try {
       const res = await fetch(api.apiURL("/lnl-ai/chat"), { method: "POST", headers: H, body: JSON.stringify({
@@ -408,6 +463,8 @@ function build() {
               const now = Date.now(); if (now - paint > 80) { paint = now; cur.innerHTML = md(curText); scroll(); }
             } else if (d?.type === "message_stop") flush();
           } else if (ev.type === "assistant") {
+            const mu = ev.message?.usage;
+            if (mu && !ev.parent_tool_use_id) { const n = (mu.input_tokens || 0) + (mu.cache_creation_input_tokens || 0) + (mu.cache_read_input_tokens || 0); if (n) c.ctx = n; }
             for (const b of ev.message?.content || []) {
               if (b.type === "tool_use") {
                 flush();
@@ -436,7 +493,8 @@ function build() {
             if (ev.session_id) c.sessions[agent] = ev.session_id;
             const u = ev.usage || {}; const tok = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
             const model = Object.keys(ev.modelUsage || {})[0];
-            status.textContent = `Xong · ${Math.round((ev.duration_ms || 0) / 1000)}s` + (ev.num_turns ? ` · ${ev.num_turns} lượt` : "") + (tok ? ` · ${Math.round(tok / 1000)}k token vào, ${u.output_tokens || 0} ra` : "") + (model ? ` · ${model}` : "");
+            status.textContent = `Xong · ${Math.round((ev.duration_ms || 0) / 1000)}s` + (ev.num_turns ? ` · ${ev.num_turns} lượt` : "") + (tok ? ` · ${Math.round(tok / 1000)}k token vào, ${u.output_tokens || 0} ra` : "") + (model ? ` · ${model}` : "") + ctxText(c);
+            ok = !ev.is_error;
             if (ev.is_error && ev.result) { addMsg("err", ev.result); c.history.push({ role: "err", text: ev.result }); }
           } else if (ev.type === "lnl_error") { flush(); addMsg("err", ev.text); c.history.push({ role: "err", text: ev.text }); status.textContent = "Lỗi"; }
         }
@@ -444,10 +502,24 @@ function build() {
     } catch (err) { flush(); addMsg("err", String(err.message || err)); status.textContent = "Lỗi"; }
     clearInterval(tick); flush();
     for (const { h } of cards.values()) if (h.ok == null) h.ok = false;
+    if (ok && carry) delete c.carry;
+    if (ok && compact && lastAI) {
+      // Phiên mới gọn nhẹ: bỏ phiên cũ, tin sau mang theo bản tóm tắt.
+      const note = "— Đã tóm gọn. Tin tiếp theo bắt đầu phiên mới, mang theo bản tóm tắt ở trên. —";
+      c.carry = lastAI.slice(0, 8000); c.sessions = {}; c.ctx = 0;
+      c.history.push({ role: "ai", text: note }); addMsg("ai", note);
+      status.textContent = "Đã tóm gọn — tin sau tốn ít token hơn";
+    }
     save(); running = null; go.textContent = "Gửi"; go.classList.remove("stop");
     if (/đang làm|Đang dừng/.test(status.textContent)) status.textContent = "Đã dừng";
+    else notify(ok ? who + " đã xong" : who + " dừng vì lỗi", (lastAI || status.textContent).replace(/[#*`>]/g, "").slice(0, 160));
   }
-  go.onclick = run;
+  go.onclick = () => run();
+  bCompact.onclick = () => { if (!state.open) setOpen(true); if (!running) run({ compact: true }); };
+  bBell.onclick = () => { state.notify = state.notify === false; bBell.classList.toggle("on", state.notify); if (state.notify) askNotify(); save(); status.textContent = state.notify ? "Sẽ báo khi xong (khi bạn ở cửa sổ khác)" : "Đã tắt báo khi xong"; };
+  // Workflow ComfyUI chạy xong / lỗi cũng báo
+  api.addEventListener("execution_success", () => notify("ComfyUI đã tạo xong", "Workflow vừa chạy xong — mở để xem kết quả."));
+  api.addEventListener("execution_error", (e) => notify("ComfyUI bị lỗi", String(e?.detail?.exception_message || "Workflow dừng vì lỗi").slice(0, 160)));
 
   show(); grow(); relayout();
   if (state.open) setTimeout(() => ta.focus(), 300);
@@ -457,6 +529,7 @@ function build() {
 app.registerExtension({
   name: "LNL.AIPanel",
   async setup() {
+    await Promise.race([loadDisk(), new Promise((r) => setTimeout(r, 3000))]);
     setInterval(syncCanvas, 3000);
     // Không chặn khởi động: chờ vùng bên phải của ComfyUI xuất hiện rồi gắn khung.
     let tries = 0;

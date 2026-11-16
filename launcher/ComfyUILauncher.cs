@@ -21,16 +21,43 @@ static class ComfyUILauncher
     static string root;
     static string logPath;
 
-    [STAThread]
-    static void Main()
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    const string RunName = "LNL ComfyUI";
+    static bool quiet;
+
+    // Tự mở cùng Windows (mặc định tắt): khi bật, Windows chạy "ComfyUI.exe --tray" — chỉ bật server, nằm dưới khay, không mở cửa sổ.
+    static bool AutoStart
     {
+        get
+        {
+            try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey)) return k != null && k.GetValue(RunName) != null; }
+            catch { return false; }
+        }
+        set
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey))
+                {
+                    if (value) k.SetValue(RunName, "\"" + Application.ExecutablePath + "\" --tray");
+                    else if (k.GetValue(RunName) != null) k.DeleteValue(RunName);
+                }
+            }
+            catch (Exception e) { MessageBox.Show("Không đổi được chế độ tự mở: " + e.Message, "ComfyUI"); }
+        }
+    }
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+        quiet = Array.IndexOf(args, "--tray") >= 0;
         bool first;
         using (var mutex = new Mutex(true, "LNL-ComfyUI-Launcher", out first))
         {
             if (!first)
             {
-                // Đã chạy rồi: chỉ mở lại cửa sổ.
-                OpenWindow();
+                // Đã chạy rồi: chỉ mở lại cửa sổ (trừ khi Windows tự mở lần nữa).
+                if (!quiet) OpenWindow();
                 return;
             }
             Application.EnableVisualStyles();
@@ -53,6 +80,9 @@ static class ComfyUILauncher
             menu.Items.Add("Mở thư mục model", null, (s, e) => Process.Start("explorer.exe", "\"" + Path.Combine(root, "models") + "\""));
             menu.Items.Add("Mở thư mục ảnh xuất", null, (s, e) => Process.Start("explorer.exe", "\"" + Path.Combine(root, "output") + "\""));
             menu.Items.Add("Xem nhật ký", null, (s, e) => { if (File.Exists(logPath)) Process.Start("notepad.exe", "\"" + logPath + "\""); });
+            var auto = new ToolStripMenuItem("Tự mở cùng Windows (chạy ngầm)") { CheckOnClick = true, Checked = AutoStart };
+            auto.CheckedChanged += (s, e) => { AutoStart = auto.Checked; auto.Checked = AutoStart; };
+            menu.Items.Add(auto);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Thoát ComfyUI", null, (s, e) => Quit());
             tray.ContextMenuStrip = menu;
@@ -62,7 +92,7 @@ static class ComfyUILauncher
             {
                 // Server đã chạy sẵn (mở bằng cách khác): dùng luôn.
                 tray.Text = "ComfyUI - đang chạy";
-                OpenWindow();
+                if (!quiet) OpenWindow();
             }
             else
             {
@@ -72,7 +102,7 @@ static class ComfyUILauncher
                     for (int i = 0; i < 300; i++)
                     {
                         if (server != null && server.HasExited) break;
-                        if (IsUp()) { tray.Text = "ComfyUI - đang chạy"; OpenWindow(); return; }
+                        if (IsUp()) { tray.Text = "ComfyUI - đang chạy"; if (!quiet) OpenWindow(); return; }
                         Thread.Sleep(1000);
                     }
                     tray.ShowBalloonTip(8000, "ComfyUI", "ComfyUI không khởi động được. Bấm chuột phải biểu tượng > Xem nhật ký.", ToolTipIcon.Error);
@@ -80,7 +110,7 @@ static class ComfyUILauncher
                 });
                 waiter.IsBackground = true;
                 waiter.Start();
-                tray.ShowBalloonTip(4000, "ComfyUI", "Đang khởi động, cửa sổ sẽ tự mở...", ToolTipIcon.Info);
+                if (!quiet) tray.ShowBalloonTip(4000, "ComfyUI", "Đang khởi động, cửa sổ sẽ tự mở...", ToolTipIcon.Info);
             }
 
             Application.ApplicationExit += (s, e) => StopServer();

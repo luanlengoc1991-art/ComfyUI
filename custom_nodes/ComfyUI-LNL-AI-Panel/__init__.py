@@ -35,6 +35,7 @@ Trả lời tiếng Việt, ngắn gọn. Với việc tạo ảnh/workflow dùn
 - comfyui_load_canvas: đưa workflow lên canvas cho người dùng thấy và sửa tiếp.
 - comfyui_generate_image / comfyui_run_workflow: chạy và lấy file kết quả (ảnh tự hiện trong khung chat).
 - comfyui_list_models, comfyui_status.
+- comfyui_download_model: tải model (link https, ví dụ Hugging Face …/resolve/main/<file>) vào đúng thư mục models/<loại>; comfyui_download_status xem tiến độ. Hỏi lại người dùng trước khi tải file trên 10 GB.
 Prompt ảnh viết tiếng Anh. Model/custom node mới cài vào thư mục ComfyUI tương ứng."""
 
 
@@ -207,6 +208,116 @@ async def upload(request):
     return web.json_response({"path": full, "name": "lnl-ai/" + fname})
 
 
+STATE_FILE = os.path.join(DATA_DIR, "state.json")
+STATE_LOCK = threading.Lock()
+
+
+@routes.get("/lnl-ai/state")
+async def get_state(request):
+    """Lịch sử trò chuyện và lựa chọn của khung AI, lưu trên ổ đĩa (không mất khi xoá dữ liệu trình duyệt)."""
+    _guard(request)
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return web.json_response(json.load(f))
+    except (OSError, ValueError):
+        return web.json_response({})
+
+
+@routes.post("/lnl-ai/state")
+async def put_state(request):
+    _guard(request)
+    data = await request.json()
+    if not isinstance(data, dict) or not isinstance(data.get("convs"), list):
+        return web.json_response({"error": "Sai dữ liệu"}, status=400)
+    text = json.dumps(data, ensure_ascii=False)
+    if len(text) > 20 * 1024 * 1024:
+        return web.json_response({"error": "Lịch sử quá lớn"}, status=413)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with STATE_LOCK:
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, STATE_FILE)
+    return web.json_response({"ok": True})
+
+
+# ---------- Tải model (AI hoặc người dùng ra lệnh) ----------
+MODEL_FOLDERS = {"checkpoints", "loras", "vae", "controlnet", "upscale_models", "clip", "clip_vision", "text_encoders",
+                 "diffusion_models", "unet", "embeddings", "background_removal", "ipadapter", "style_models"}
+DOWNLOADS: dict[str, dict] = {}
+
+
+def _download_worker(job: dict):
+    import urllib.request
+    tmp = job["path"] + ".part"
+    try:
+        req = urllib.request.Request(job["url"], headers={"User-Agent": "LNL-ComfyUI"})
+        with urllib.request.urlopen(req, timeout=60) as res, open(tmp, "wb") as out:
+            job["total"] = int(res.headers.get("Content-Length") or 0)
+            while True:
+                if job.get("cancel"):
+                    raise RuntimeError("Đã huỷ")
+                chunk = res.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+                job["done"] += len(chunk)
+        os.replace(tmp, job["path"])
+        job["state"] = "done"
+    except Exception as e:  # noqa: BLE001 — báo lỗi cho người dùng, không làm sập server
+        job["state"] = "error"
+        job["error"] = str(e)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+@routes.post("/lnl-ai/download")
+async def download_model(request):
+    _guard(request)
+    data = await request.json()
+    url = str(data.get("url") or "")
+    folder = str(data.get("folder") or "")
+    if not url.startswith("https://"):
+        return web.json_response({"error": "Chỉ nhận link https"}, status=400)
+    if folder not in MODEL_FOLDERS:
+        return web.json_response({"error": "Thư mục model không hợp lệ", "folders": sorted(MODEL_FOLDERS)}, status=400)
+    name = os.path.basename(str(data.get("filename") or url.split("?")[0].rstrip("/").split("/")[-1]))
+    if not name or name.startswith(".") or not name.lower().endswith((".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".onnx")):
+        return web.json_response({"error": "Tên file model không hợp lệ (cần .safetensors/.ckpt/.pt/.pth/.bin/.gguf/.onnx)"}, status=400)
+    base = os.path.join(COMFY_ROOT, "models", folder)
+    os.makedirs(base, exist_ok=True)
+    path = os.path.join(base, name)
+    if os.path.exists(path):
+        return web.json_response({"ok": True, "exists": True, "path": path})
+    for j in DOWNLOADS.values():
+        if j["path"] == path and j["state"] == "running":
+            return web.json_response({"ok": True, "id": j["id"], "running": True})
+    jid = uuid.uuid4().hex[:10]
+    job = {"id": jid, "url": url, "folder": folder, "name": name, "path": path, "done": 0, "total": 0,
+           "state": "running", "error": "", "at": time.time()}
+    DOWNLOADS[jid] = job
+    threading.Thread(target=_download_worker, args=(job,), daemon=True).start()
+    return web.json_response({"ok": True, "id": jid})
+
+
+@routes.get("/lnl-ai/downloads")
+async def list_downloads(request):
+    _guard(request)
+    return web.json_response([{k: v for k, v in j.items() if k != "cancel"} for j in DOWNLOADS.values()])
+
+
+@routes.post("/lnl-ai/download/cancel")
+async def cancel_download(request):
+    _guard(request)
+    data = await request.json()
+    job = DOWNLOADS.get(str(data.get("id") or ""))
+    if job:
+        job["cancel"] = True
+    return web.json_response({"ok": bool(job)})
+
+
 @routes.post("/lnl-ai/canvas")
 async def save_canvas(request):
     _guard(request)
@@ -293,7 +404,7 @@ async def chat(request):
         elif mode == "plan":
             args += ["--sandbox", "read-only"]
         else:
-            args += ["--full-auto"]
+            args += ["--sandbox", "workspace-write"]  # Codex 0.169 bỏ --full-auto
         if model:
             args += ["-m", model]
         if effort:
