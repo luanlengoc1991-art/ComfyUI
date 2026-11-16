@@ -20,6 +20,9 @@ venv\Scripts\pip install -r requirements.txt -r manager_requirements.txt
 Model ảnh chân thực (đặt vào `models\checkpoints`):
 `Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors` — https://huggingface.co/RunDiffusion/Juggernaut-XL-v9
 
+## Tự mở cùng Windows
+- Chuột phải biểu tượng ComfyUI dưới khay → **Tự mở cùng Windows (chạy ngầm)** (mặc định tắt). Khi bật, Windows chạy `ComfyUI.exe --tray`: chỉ bật server, không mở cửa sổ; bấm biểu tượng để mở.
+
 ## Build lại ComfyUI.exe
 
 ```powershell
@@ -57,8 +60,14 @@ git fetch upstream; git merge upstream/master; git push
 - Canvas đang mở được chia sẻ cho AI qua MCP `comfyui_get_canvas`; AI đưa workflow lên canvas bằng `comfyui_load_canvas`.
 - Ô trên cùng chọn AI: **Claude Code (tài khoản Claude)** hoặc **Codex (tài khoản ChatGPT)**. Cả hai chỉ chạy bằng đăng nhập của máy (hạn mức gói tháng); khung tự bỏ `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` để không tính tiền theo token. Mỗi AI nhớ phiên riêng; tiếp tục phiên giúp tận dụng cache, tốn ít token hơn.
 - Trong ô nhập: chọn AI, **model** (Claude Fable 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5; Codex lấy từ `~/.codex/models_cache.json`), **mức độ** suy nghĩ, quyền thao tác, và **Gọn/Đầy đủ**. Gọn (mặc định) chỉ nạp MCP comfyui, bỏ hook/skill của máy: một câu hỏi đo được 137k → 68k token vào. Đầy đủ dùng mọi MCP/skill (Vira, Frames, Gmail…). Dán/kéo/📎 ảnh để gửi kèm, ◎ gửi kèm node đang chọn, nhấp đúp câu trả lời để chép, Esc để dừng.
+- Lịch sử trò chuyện lưu trên ổ đĩa (`user/lnl-ai/state.json`), không chỉ trong trình duyệt: xoá dữ liệu Edge hay đổi trình duyệt vẫn còn.
+- 🗜 **Tóm gọn**: AI tóm tắt cuộc trò chuyện dài, tin sau bắt đầu phiên mới mang theo bản tóm tắt (đo được 102k → 34k token vào). Dòng trạng thái hiện **ngữ cảnh đã dùng**, quá 120k thì nhắc tóm gọn.
+- 🔔 **Báo khi xong**: khi bạn đang ở cửa sổ khác, AI làm xong hoặc ComfyUI tạo ảnh xong/lỗi thì có thông báo Windows + tiếng chuông.
+- **Tải model bằng lời**: nói "tải model … về loras" → AI dùng tool `comfyui_download_model` (chỉ link https, chỉ thư mục model, đuôi .safetensors/.ckpt/.pt/.pth/.bin/.gguf/.onnx; hỏi trước file > 10 GB), xem tiến độ bằng `comfyui_download_status`.
+- Codex CLI 0.169: dùng `--sandbox workspace-write` (bản mới bỏ `--full-auto`) và cho phép sẵn tool MCP comfyui (trừ chế độ Chỉ lập kế hoạch).
 - Yêu cầu: đã cài Claude Code (`claude`), với Codex thì `npm i -g @openai/codex` (đăng nhập ChatGPT trong `~/.codex`), và đăng ký MCP `comfyui` (mục ở trên).
 
 ## Bộ workflow tiếng Việt
+- 5 workflow có sẵn trong menu **Templates** của ComfyUI (nhóm ComfyUI-LNL-AI-Panel): bấm là mở.
 - `lnl-workflows/`: tạo ảnh chân thực, xoá nền, đổi nền, phóng to 4x, tạo theo bố cục (ControlNet). Xem `lnl-workflows/README.md`.
 - Model nằm ở `C:\LNL-AI-Models\ComfyUI-models` (SSD), `models` là junction trỏ tới đó: lần nạp đầu 343 s → 51 s.

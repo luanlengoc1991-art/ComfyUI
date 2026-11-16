@@ -434,7 +434,7 @@ function build() {
     if (!compact) { ta.value = ""; grow(); } attached = []; withSel = false; bSel.style.color = ""; drawChips(); save();
     await syncCanvas();
     go.textContent = "Dừng"; go.classList.add("stop"); running = "pending";
-    const t0 = Date.now(); const tick = setInterval(() => { if (running) status.textContent = `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
+    let finished = false; const t0 = Date.now(); const tick = setInterval(() => { if (running && !finished) status.textContent = `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
     status.textContent = who + " đang làm…";
     let cur = null, curText = "", lastAI = "", ok = false; const cards = new Map();
     const flush = () => { if (cur && curText) { lastAI = curText; c.history.push({ role: "ai", text: curText }); cur.dataset.raw = curText; cur.innerHTML = md(curText); addImages(cur, curText); } cur = null; curText = ""; };
@@ -489,7 +489,7 @@ function build() {
               }
             }
           } else if (ev.type === "result") {
-            flush();
+            flush(); finished = true;
             if (ev.session_id) c.sessions[agent] = ev.session_id;
             const u = ev.usage || {}; const tok = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
             const model = Object.keys(ev.modelUsage || {})[0];
