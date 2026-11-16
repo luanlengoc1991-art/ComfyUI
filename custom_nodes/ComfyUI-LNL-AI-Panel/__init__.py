@@ -28,6 +28,32 @@ CANVAS_FILE = os.path.join(DATA_DIR, "canvas.json")
 MODES = {"auto", "acceptEdits", "bypassPermissions", "plan", "default", "dontAsk"}
 RUNS: dict[str, subprocess.Popen] = {}
 
+# Bộ workflow tiếng Việt hiện sẵn ở mục Workflows (thanh bên trái), không chỉ trong Templates.
+# Chỉ chép khi chưa có, để không đè bản người dùng đã sửa.
+SEED_WORKFLOWS = {
+    "01-tao-anh-chan-thuc.json": "LNL 01 - Tạo ảnh chân thực.json",
+    "02-xoa-nen.json": "LNL 02 - Xoá nền.json",
+    "03-doi-nen.json": "LNL 03 - Đổi nền.json",
+    "04-phong-to-4x.json": "LNL 04 - Phóng to 4x.json",
+    "05-tao-theo-bo-cuc.json": "LNL 05 - Theo bố cục.json",
+}
+
+
+def _seed_workflows():
+    try:
+        src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_workflows")
+        dst = os.path.join(folder_paths.get_user_directory(), "default", "workflows")
+        os.makedirs(dst, exist_ok=True)
+        for name, title in SEED_WORKFLOWS.items():
+            target = os.path.join(dst, title)
+            if os.path.isfile(os.path.join(src, name)) and not os.path.exists(target):
+                shutil.copyfile(os.path.join(src, name), target)
+    except Exception as e:  # không để lỗi chép làm hỏng việc nạp khối
+        print("[LNL AI] Không chép được workflow mẫu:", e)
+
+
+_seed_workflows()
+
 SYSTEM_PROMPT = f"""Bạn đang chạy trong khung "AI" bên trong app ComfyUI của người dùng (thư mục {COMFY_ROOT}, server http://127.0.0.1:8188).
 Người dùng ra lệnh ở đây thay cho Cursor — làm việc y như Claude Code trong Cursor (đọc/sửa file, chạy lệnh, dùng skill và MCP).
 Trả lời tiếng Việt, ngắn gọn. Với việc tạo ảnh/workflow dùng MCP "comfyui":
