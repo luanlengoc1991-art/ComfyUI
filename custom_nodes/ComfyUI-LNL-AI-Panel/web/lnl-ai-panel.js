@@ -78,13 +78,13 @@ const notify = (title, body) => {
 
 const CSS = `
 #comfyui-body-right:has(.lnl-dock){display:flex!important}
-.lnl-dock{display:flex;height:100%;font-size:13px;color:var(--fg-color,#ddd);background:var(--comfy-menu-bg,#171717)}
+.lnl-dock{display:flex;height:100%;max-height:100%;min-height:0;overflow:hidden;font-size:13px;color:var(--fg-color,#ddd);background:var(--comfy-menu-bg,#171717)}
 .lnl-bar{width:44px;flex:0 0 44px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-left:1px solid var(--border-color,#2c2c2c);background:#141821}
 .lnl-bar button{width:34px;height:34px;border-radius:8px;border:none;background:transparent;color:#aab;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
 .lnl-bar button:hover{background:#262c3a;color:#fff}
 .lnl-bar button.on{background:#2b3d63;color:#ffd166}
 .lnl-bar .sp{flex:1}
-.lnl-pane{position:relative;display:flex;flex-direction:column;min-width:0;border-left:1px solid var(--border-color,#2c2c2c);background:#181818}
+.lnl-pane{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-left:1px solid var(--border-color,#2c2c2c);background:#181818}
 .lnl-dock.closed .lnl-pane{display:none}
 .lnl-grip{position:absolute;left:-3px;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:3}
 .lnl-grip:hover,.lnl-grip.drag{background:#3b6fe0}
@@ -92,7 +92,7 @@ const CSS = `
 .lnl-head b{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lnl-head button{background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:5px}
 .lnl-head button:hover{background:#2a2a2a;color:#fff}
-.lnl-log{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+.lnl-log{flex:1 1 auto;min-height:0;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
 .lnl-hint{opacity:.6;font-size:12px;line-height:1.5;padding:6px 2px}
 .lnl-msg{line-height:1.55;word-break:break-word}
 .lnl-msg.user{background:#24324a;border:1px solid #33496d;padding:8px 10px;border-radius:10px;white-space:pre-wrap;align-self:stretch}
@@ -105,7 +105,7 @@ const CSS = `
 .lnl-msg pre code{background:none;padding:0}
 .lnl-msg table{border-collapse:collapse;margin:4px 0;font-size:12px}.lnl-msg td,.lnl-msg th{border:1px solid #333;padding:3px 6px}
 .lnl-msg a{color:#7ab0ff}
-.lnl-msg img,.lnl-imgs img{max-width:100%;border-radius:6px;margin-top:6px;cursor:pointer;display:block}
+.lnl-msg img,.lnl-imgs img{max-width:100%;max-height:420px;object-fit:contain;border-radius:6px;margin-top:6px;cursor:pointer;display:block}
 .lnl-tool{border:1px solid #2c2c2c;border-radius:7px;background:#1d1d1d;font-size:12px}
 .lnl-tool summary{cursor:pointer;padding:5px 8px;list-style:none;display:flex;gap:6px;align-items:center;color:#bbb;white-space:nowrap;overflow:hidden}
 .lnl-tool summary::-webkit-details-marker{display:none}
@@ -114,22 +114,28 @@ const CSS = `
 .lnl-tool summary .s{margin-left:auto;opacity:.8}
 .lnl-tool pre{margin:0;padding:6px 8px;border-top:1px solid #2c2c2c;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:11px;opacity:.85}
 .lnl-think{font-size:12px;opacity:.6;font-style:italic}
-.lnl-in{padding:8px 10px 10px;border-top:1px solid #2a2a2a}
-.lnl-box{border:1px solid #3a3a3a;border-radius:10px;background:#202020;padding:6px}
-.lnl-box:focus-within{border-color:#3b6fe0}
+.lnl-in{flex:0 0 auto;padding:10px 12px 12px;background:#181818;box-shadow:0 -10px 18px -12px rgba(0,0,0,.7);position:relative;z-index:2}
+.lnl-box{position:relative;border:1px solid #3a3f4b;border-radius:14px;background:#1f2128;padding:8px 8px 6px;transition:border-color .15s,box-shadow .15s}
+.lnl-box:focus-within{border-color:#e0457b;box-shadow:0 0 0 3px rgba(224,69,123,.18)}
 .lnl-box.drop{border-color:#ffd166;background:#2a2618}
 .lnl-chips{display:flex;flex-wrap:wrap;gap:4px}
-.lnl-chip{display:flex;align-items:center;gap:4px;background:#2b2b2b;border-radius:6px;padding:2px 6px;font-size:11px;max-width:100%}
-.lnl-chip img{width:22px;height:22px;object-fit:cover;border-radius:3px}
+.lnl-chips:not(:empty){margin-bottom:6px}
+.lnl-chip{display:flex;align-items:center;gap:4px;background:#2b2e36;border-radius:8px;padding:2px 6px;font-size:11px;max-width:100%}
+.lnl-chip img{width:22px;height:22px;object-fit:cover;border-radius:4px}
 .lnl-chip button{background:none;border:none;color:#999;cursor:pointer;padding:0 2px}
-.lnl-box textarea{width:100%;box-sizing:border-box;min-height:44px;max-height:240px;resize:none;background:transparent;color:inherit;border:none;outline:none;padding:4px;font:inherit;line-height:1.45}
-.lnl-ctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.lnl-ctl select{background:#262626;color:#ccc;border:1px solid #333;border-radius:6px;padding:2px 4px;font-size:11px;max-width:150px}
-.lnl-ctl .ic{background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:2px 5px;border-radius:5px}
-.lnl-ctl .ic:hover{background:#2e2e2e;color:#fff}
-.lnl-ctl .go{margin-left:auto;background:#3b6fe0;color:#fff;border:none;border-radius:7px;padding:4px 12px;cursor:pointer;font-size:12px}
-.lnl-ctl .go.stop{background:#b33a3a}
-.lnl-status{font-size:11px;opacity:.65;margin-top:5px;min-height:14px;display:flex;gap:8px}
+.lnl-box textarea{display:block;width:100%;box-sizing:border-box;min-height:42px;max-height:240px;resize:none;background:transparent;color:#e8e8e8;border:none;outline:none;padding:2px 4px 6px;font:inherit;font-size:13.5px;line-height:1.5}
+.lnl-box textarea::placeholder{color:#7d828e}
+.lnl-ctl{display:flex;flex-wrap:wrap;gap:4px 3px;min-width:0;padding-right:38px;align-items:center;padding-top:6px;border-top:1px solid #2c2f37}
+.lnl-ctl select{appearance:none;-webkit-appearance:none;background:#2a2d35;color:#cfd3dc;border:1px solid transparent;border-radius:999px;padding:3px 9px;font-size:11px;flex:0 1 auto;min-width:0;max-width:118px;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+.lnl-ctl select:hover{border-color:#454a57;color:#fff}
+.lnl-ctl select.lite{background:transparent;color:#9aa0ab;padding:3px 6px}
+.lnl-ctl .ic{flex:0 0 26px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid transparent;color:#a9adb7;cursor:pointer;font-size:14px;padding:0;border-radius:8px}
+.lnl-ctl .ic:hover{background:#2e313a;color:#fff;border-color:#3a3e48}
+.lnl-ctl .sp{display:none}
+.lnl-ctl .go{position:absolute;right:8px;bottom:7px;width:30px;height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;background:#e0457b;color:#fff;border:none;border-radius:9px;cursor:pointer;font-size:16px;font-weight:700;line-height:1;padding:0}
+.lnl-ctl .go:hover{filter:brightness(1.12)}
+.lnl-ctl .go.stop{background:#3a3e48;font-size:12px}
+.lnl-status{font-size:11px;opacity:.65;margin-top:6px;padding:0 4px;min-height:14px;display:flex;gap:8px}
 .lnl-hist{position:absolute;inset:44px 0 0 0;background:#181818;z-index:4;overflow:auto;padding:8px;display:none}
 .lnl-hist.show{display:block}
 .lnl-hist div{padding:7px 8px;border-radius:6px;cursor:pointer;display:flex;gap:6px;align-items:center}
@@ -244,6 +250,18 @@ function build() {
   if (!document.getElementById("lnl-ai-css")) { const s = el("style"); s.id = "lnl-ai-css"; s.textContent = CSS; document.head.appendChild(s); }
 
   const dock = el("div", "lnl-dock" + (state.open ? "" : " closed"));
+  // Hàng lưới của ComfyUI cao theo nội dung: tự giữ khung bằng đúng phần màn hình còn lại,
+  // để tin nhắn dài/ảnh lớn chỉ cuộn bên trong, ô nhập luôn nằm ở đáy.
+  const fitDock = () => {
+    const body = document.getElementById("comfyui-body") || host.parentElement;
+    const top = Math.max(0, host.getBoundingClientRect().top - (body?.getBoundingClientRect().top || 0));
+    const h = Math.max(240, (body?.clientHeight || innerHeight) - top);
+    dock.style.height = h + "px"; host.style.maxHeight = h + "px"; host.style.overflow = "hidden";
+  };
+  addEventListener("resize", fitDock);
+  const fitBody = document.getElementById("comfyui-body");
+  if (fitBody && window.ResizeObserver) new ResizeObserver(fitDock).observe(fitBody);
+  requestAnimationFrame(fitDock);
   const pane = el("div", "lnl-pane"); pane.style.width = state.width + "px";
   const bar = el("div", "lnl-bar");
   const bAI = el("button", state.open ? "on" : "", "✨"); bAI.title = "Khung AI (Ctrl+L)";
@@ -280,10 +298,10 @@ function build() {
   const sAgent = el("select"), sModel = el("select"), sEffort = el("select"), sMode = el("select"), sTools = el("select");
   sTools.title = "Gọn: chỉ công cụ ComfyUI, tốn ít token và nhanh hơn. Đầy đủ: thêm mọi MCP, skill và hook của máy (Vira, Frames, Gmail…)";
   sAgent.title = "AI — chạy bằng tài khoản đăng nhập của máy"; sModel.title = "Model"; sEffort.title = "Mức độ suy nghĩ"; sMode.title = "Quyền thao tác";
-  const bAttach = el("button", "ic", "📎"); bAttach.title = "Đính kèm ảnh (hoặc dán/kéo thả ảnh vào ô)";
+  const bAttach = el("button", "ic", "＋"); bAttach.title = "Đính kèm ảnh (hoặc dán/kéo thả ảnh vào ô)";
   const bSel = el("button", "ic", "◎"); bSel.title = "Gửi kèm node đang chọn trên canvas";
-  const go = el("button", "go", "Gửi");
-  ctl.append(sAgent, sModel, sEffort, sMode, sTools, bAttach, bSel, go);
+  const go = el("button", "go", "↑"); go.title = "Gửi (Enter)"; sMode.classList.add("lite"); sTools.classList.add("lite");
+  ctl.append(bAttach, bSel, sAgent, sModel, sEffort, el("div", "sp"), sMode, sTools, go);
   box.append(chips, ta, ctl);
   const status = el("div", "lnl-status");
   inp.append(box, status); pane.appendChild(inp);
@@ -433,7 +451,7 @@ function build() {
     addMsg("user", shown); c.history.push({ role: "user", text: shown });
     if (!compact) { ta.value = ""; grow(); } attached = []; withSel = false; bSel.style.color = ""; drawChips(); save();
     await syncCanvas();
-    go.textContent = "Dừng"; go.classList.add("stop"); running = "pending";
+    go.textContent = "■"; go.title = "Dừng"; go.classList.add("stop"); running = "pending";
     let finished = false; const t0 = Date.now(); const tick = setInterval(() => { if (running && !finished) status.textContent = `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
     status.textContent = who + " đang làm…";
     let cur = null, curText = "", lastAI = "", ok = false; const cards = new Map();
@@ -510,7 +528,7 @@ function build() {
       c.history.push({ role: "ai", text: note }); addMsg("ai", note);
       status.textContent = "Đã tóm gọn — tin sau tốn ít token hơn";
     }
-    save(); running = null; go.textContent = "Gửi"; go.classList.remove("stop");
+    save(); running = null; go.textContent = "↑"; go.title = "Gửi (Enter)"; go.classList.remove("stop");
     if (/đang làm|Đang dừng/.test(status.textContent)) status.textContent = "Đã dừng";
     else notify(ok ? who + " đã xong" : who + " dừng vì lỗi", (lastAI || status.textContent).replace(/[#*`>]/g, "").slice(0, 160));
   }
