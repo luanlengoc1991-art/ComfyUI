@@ -129,7 +129,7 @@ static class ComfyUILauncher
         {
             if (File.Exists(b))
             {
-                Process.Start(b, "--app=" + Url + " --window-size=1500,950");
+                Process.Start(b, "--app=" + Url + " --start-maximized");
                 return;
             }
         }

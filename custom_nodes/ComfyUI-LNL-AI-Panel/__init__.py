@@ -56,6 +56,24 @@ def _codex_exe():
     return shutil.which("codex")
 
 
+def _lean_mcp_config():
+    """Chế độ Gọn: chỉ nạp MCP comfyui (bỏ các MCP khác của máy) để mỗi câu hỏi tốn ít token hơn."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    path = os.path.join(DATA_DIR, "mcp-gon.json")
+    node = shutil.which("node") or "node"
+    cfg = {"mcpServers": {"comfyui": {"command": node, "args": [os.path.join(COMFY_ROOT, "mcp", "comfyui-mcp.mjs")]}}}
+    text = json.dumps(cfg, ensure_ascii=False, indent=1)
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text:
+                return path
+    except OSError:
+        pass
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
+
+
 def _account_env():
     """Chỉ dùng tài khoản đăng nhập của máy (hạn mức tháng Claude / ChatGPT), không dùng API key tính tiền theo token."""
     env = dict(os.environ)
@@ -243,6 +261,7 @@ async def chat(request):
     model = model if isinstance(model, str) and model.replace("-", "").replace(".", "").isalnum() else None
     mode = body.get("mode") if body.get("mode") in MODES else "auto"
     effort = body.get("effort") if body.get("effort") in EFFORTS else None
+    lean = body.get("tools") != "full"
     images = [p for p in (body.get("images") or []) if isinstance(p, str)
               and os.path.abspath(p).startswith(os.path.abspath(UPLOAD_DIR) + os.sep) and os.path.isfile(p)][:8]
     if images:
@@ -253,7 +272,11 @@ async def chat(request):
         if not exe:
             return web.json_response({"error": "Không tìm thấy Claude Code (claude.exe). Cài Claude Code rồi thử lại."}, status=500)
         args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-                "--permission-mode", mode, "--append-system-prompt", SYSTEM_PROMPT]
+                "--permission-mode", mode, "--append-system-prompt", SYSTEM_PROMPT,
+                "--exclude-dynamic-system-prompt-sections"]  # phần đầu giống nhau giữa các phiên → đọc lại từ cache
+        if lean:
+            # Gọn: chỉ MCP comfyui, bỏ hook/plugin/skill của máy (~80k → ~50k token mỗi câu, nhanh gấp đôi).
+            args += ["--strict-mcp-config", "--mcp-config", _lean_mcp_config(), "--setting-sources", "project,local"]
         if sid:
             args += ["--resume", sid]
         if model:
