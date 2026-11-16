@@ -51,12 +51,12 @@ git fetch upstream; git merge upstream/master; git push
 ```
 
 ## Khung "AI" trong ComfyUI (ra lệnh Claude Code ngay trong app)
-- Custom node `custom_nodes/ComfyUI-LNL-AI-Panel`: tab **AI** (biểu tượng ✨) ở thanh bên trái.
+- Custom node `custom_nodes/ComfyUI-LNL-AI-Panel`: khung AI ở **bên phải** (như Claude trong Cursor), có thanh dọc riêng: ✨ mở/đóng (**Ctrl+L**), ＋ trò chuyện mới, 🕘 lịch sử. Kéo mép trái để đổi độ rộng; cửa sổ hẹp dưới 900 px thì khung nổi đè lên canvas.
 - Chạy Claude Code CLI bằng tài khoản Claude của máy (cùng skill, MCP, quy tắc như trong Cursor), thư mục làm việc là ComfyUI.
 - Chọn chế độ quyền (Tự động / Tự sửa file / Toàn quyền / Chỉ lập kế hoạch) và model; "+ Mới" để bắt đầu phiên mới, phiên cũ được nhớ.
 - Canvas đang mở được chia sẻ cho AI qua MCP `comfyui_get_canvas`; AI đưa workflow lên canvas bằng `comfyui_load_canvas`.
 - Ô trên cùng chọn AI: **Claude Code (tài khoản Claude)** hoặc **Codex (tài khoản ChatGPT)**. Cả hai chỉ chạy bằng đăng nhập của máy (hạn mức gói tháng); khung tự bỏ `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` để không tính tiền theo token. Mỗi AI nhớ phiên riêng; tiếp tục phiên giúp tận dụng cache, tốn ít token hơn.
-- Khung tự mở khi vào app; biểu tượng có chữ "AI". Tắt tự mở: `localStorage.setItem("lnl-ai-autoopen","0")`.
+- Trong ô nhập: chọn AI, **model** (Claude Fable 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5; Codex lấy từ `~/.codex/models_cache.json`), **mức độ** suy nghĩ, quyền thao tác, và **Gọn/Đầy đủ**. Gọn (mặc định) chỉ nạp MCP comfyui, bỏ hook/skill của máy: một câu hỏi đo được 137k → 68k token vào. Đầy đủ dùng mọi MCP/skill (Vira, Frames, Gmail…). Dán/kéo/📎 ảnh để gửi kèm, ◎ gửi kèm node đang chọn, nhấp đúp câu trả lời để chép, Esc để dừng.
 - Yêu cầu: đã cài Claude Code (`claude`), với Codex thì `npm i -g @openai/codex` (đăng nhập ChatGPT trong `~/.codex`), và đăng ký MCP `comfyui` (mục ở trên).
 
 ## Bộ workflow tiếng Việt
