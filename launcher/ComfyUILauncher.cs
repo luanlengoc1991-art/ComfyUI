@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -130,10 +133,41 @@ static class ComfyUILauncher
             if (File.Exists(b))
             {
                 Process.Start(b, "--app=" + Url + " --start-maximized");
+                // Trình duyệt đang chạy sẵn thì bỏ qua --start-maximized: tự phóng to cửa sổ ComfyUI.
+                new Thread(MaximizeSoon) { IsBackground = true }.Start();
                 return;
             }
         }
         Process.Start(Url);
+    }
+
+    delegate bool EnumProc(IntPtr h, IntPtr p);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr p);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder sb, int n);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+
+    static void MaximizeSoon()
+    {
+        // Chờ tối đa 20 giây cho cửa sổ app hiện ra (tiêu đề có "ComfyUI"), rồi phóng to.
+        var seen = new HashSet<IntPtr>();
+        for (int i = 0; i < 40; i++)
+        {
+            Thread.Sleep(500);
+            EnumWindows((h, p) =>
+            {
+                if (!IsWindowVisible(h)) return true;
+                var sb = new StringBuilder(512);
+                GetWindowText(h, sb, sb.Capacity);
+                if (sb.ToString().EndsWith("ComfyUI"))
+                {
+                    if (seen.Add(h)) { if (!IsZoomed(h)) ShowWindow(h, 3); SetForegroundWindow(h); } // SW_MAXIMIZE, mỗi cửa sổ một lần
+                }
+                return true;
+            }, IntPtr.Zero);
+        }
     }
 
     static void StopServer()
