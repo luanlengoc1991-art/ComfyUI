@@ -25,6 +25,8 @@ WEB_DIRECTORY = "./web"
 COMFY_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(folder_paths.get_user_directory(), "lnl-ai")
 CANVAS_FILE = os.path.join(DATA_DIR, "canvas.json")
+CANVAS_DIR = os.path.join(DATA_DIR, "canvas")  # mỗi tab workflow một file: AI chỉ đọc/sửa đúng tab đã ra lệnh
+RUN_TABS: dict[str, str] = {}
 MODES = {"auto", "acceptEdits", "bypassPermissions", "plan", "default", "dontAsk"}
 RUNS: dict[str, subprocess.Popen] = {}
 
@@ -83,12 +85,25 @@ def _codex_exe():
     return shutil.which("codex")
 
 
-def _lean_mcp_config():
+def _tab_id(v):
+    v = v if isinstance(v, str) else ""
+    return v if 0 < len(v) <= 24 and v.isascii() and v.isalnum() else ""
+
+
+def _default_tab():
+    """Lệnh không ghi tab (MCP chạy từ nơi khác): nếu chỉ một lượt AI đang chạy thì là tab của lượt đó."""
+    tabs = {t for t in RUN_TABS.values() if t}
+    return tabs.pop() if len(tabs) == 1 else ""
+
+
+def _lean_mcp_config(tab=""):
     """Chế độ Gọn: chỉ nạp MCP comfyui (bỏ các MCP khác của máy) để mỗi câu hỏi tốn ít token hơn."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    path = os.path.join(DATA_DIR, "mcp-gon.json")
+    path = os.path.join(DATA_DIR, f"mcp-gon-{tab}.json" if tab else "mcp-gon.json")
     node = shutil.which("node") or "node"
     cfg = {"mcpServers": {"comfyui": {"command": node, "args": [os.path.join(COMFY_ROOT, "mcp", "comfyui-mcp.mjs")]}}}
+    if tab:
+        cfg["mcpServers"]["comfyui"]["env"] = {"LNL_AI_TAB": tab}
     text = json.dumps(cfg, ensure_ascii=False, indent=1)
     try:
         with open(path, encoding="utf-8") as f:
@@ -348,18 +363,34 @@ async def cancel_download(request):
 async def save_canvas(request):
     _guard(request)
     data = await request.json()
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CANVAS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
+    os.makedirs(CANVAS_DIR, exist_ok=True)
+    tab = _tab_id(data.get("tab"))
+    if tab:
+        path = os.path.join(CANVAS_DIR, tab + ".json")
+        if not data.get("api") and os.path.exists(path):
+            try:  # tab đang ẩn chỉ gửi dạng UI: giữ bản API lần trước
+                with open(path, encoding="utf-8") as f:
+                    data["api"] = json.load(f).get("api")
+            except (OSError, ValueError):
+                pass
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    if data.get("active") or not tab:
+        with open(CANVAS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
     return web.json_response({"ok": True})
 
 
 @routes.get("/lnl-ai/canvas")
 async def get_canvas(request):
     _guard(request)
-    if not os.path.exists(CANVAS_FILE):
+    tab = _tab_id(request.query.get("tab")) or _default_tab()
+    path = os.path.join(CANVAS_DIR, tab + ".json") if tab else CANVAS_FILE
+    if tab and not os.path.exists(path):
+        return web.json_response({"error": "Tab này chưa có canvas (mở tab đó trong ComfyUI một lần)", "tab": tab}, status=404)
+    if not os.path.exists(path):
         return web.json_response({"error": "Chưa có canvas (mở ComfyUI trong trình duyệt/app trước)"}, status=404)
-    with open(CANVAS_FILE, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return web.json_response(json.load(f))
 
 
@@ -370,7 +401,8 @@ async def load_canvas(request):
     wf = data.get("workflow")
     if not isinstance(wf, dict):
         return web.json_response({"error": "Thiếu workflow (object)"}, status=400)
-    PromptServer.instance.send_sync("lnl-ai.load", {"workflow": wf, "name": data.get("name") or "AI workflow"})
+    tab = _tab_id(data.get("tab")) or _default_tab()
+    PromptServer.instance.send_sync("lnl-ai.load", {"workflow": wf, "name": data.get("name") or "AI workflow", "tab": tab})
     return web.json_response({"ok": True, "clients": len(PromptServer.instance.sockets)})
 
 
@@ -399,6 +431,11 @@ async def chat(request):
     mode = body.get("mode") if body.get("mode") in MODES else "auto"
     effort = body.get("effort") if body.get("effort") in EFFORTS else None
     lean = body.get("tools") != "full"
+    tab = _tab_id(body.get("tab"))
+    tab_name = str(body.get("tab_name") or "")[:80]
+    if tab and not sid:
+        message = (f"[Bạn đang làm việc trên tab workflow \"{tab_name}\" của ComfyUI. Công cụ canvas (comfyui_get_canvas/"
+                   f"comfyui_load_canvas) tự gắn với đúng tab này; không đụng tới các tab khác.]\n\n") + message
     images = [p for p in (body.get("images") or []) if isinstance(p, str)
               and os.path.abspath(p).startswith(os.path.abspath(UPLOAD_DIR) + os.sep) and os.path.isfile(p)][:8]
     if images:
@@ -413,7 +450,7 @@ async def chat(request):
                 "--exclude-dynamic-system-prompt-sections"]  # phần đầu giống nhau giữa các phiên → đọc lại từ cache
         if lean:
             # Gọn: chỉ MCP comfyui, bỏ hook/plugin/skill của máy (~80k → ~50k token mỗi câu, nhanh gấp đôi).
-            args += ["--strict-mcp-config", "--mcp-config", _lean_mcp_config(), "--setting-sources", "project,local"]
+            args += ["--strict-mcp-config", "--mcp-config", _lean_mcp_config(tab), "--setting-sources", "project,local"]
         if sid:
             args += ["--resume", sid]
         if model:
@@ -434,6 +471,8 @@ async def chat(request):
         if mode != "plan":
             # Chạy nền không có ai bấm duyệt: cho phép sẵn các tool ComfyUI (chỉ server comfyui).
             args += ["-c", "mcp_servers.comfyui.default_tools_approval_mode=\"approve\""]
+        if tab:
+            args += ["-c", f"mcp_servers.comfyui.env={{LNL_AI_TAB=\"{tab}\"}}"]
         if model:
             args += ["-m", model]
         if effort:
@@ -447,11 +486,14 @@ async def chat(request):
         args += ["-"]
 
     env = _account_env()
+    if tab:
+        env["LNL_AI_TAB"] = tab  # MCP comfyui (chế độ Đầy đủ) kế thừa biến này
     proc = subprocess.Popen(args, cwd=COMFY_ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=env,
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     run_id = uuid.uuid4().hex
     RUNS[run_id] = proc
+    RUN_TABS[run_id] = tab
     proc.stdin.write(message.encode("utf-8"))
     proc.stdin.close()
 
@@ -504,4 +546,5 @@ async def chat(request):
         raise
     finally:
         RUNS.pop(run_id, None)
+        RUN_TABS.pop(run_id, None)
     return resp

@@ -11,7 +11,7 @@ const newConv = (agent) => ({ id: Math.random().toString(36).slice(2, 10), title
 const state = (() => {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(LS) || "{}"); } catch {}
-  s = Object.assign({ agent: "claude", mode: "auto", tools: "lean", model: { claude: "", codex: "" }, effort: { claude: "", codex: "" }, convs: [], cur: "", open: true, width: 420 }, s);
+  s = Object.assign({ agent: "claude", mode: "auto", tools: "lean", model: { claude: "", codex: "" }, effort: { claude: "", codex: "" }, convs: [], cur: "", open: true, width: 420, tabMap: {}, curByTab: {} }, s);
   if (!s.convs.length) {
     try {
       const old = JSON.parse(localStorage.getItem("lnl-ai-state-v1") || "null");
@@ -27,12 +27,38 @@ const state = (() => {
   if (!s.convs.some((c) => c.id === s.cur)) s.cur = s.convs[0].id;
   return s;
 })();
-const conv = () => state.convs.find((c) => c.id === state.cur) || state.convs[0];
+// ---------- Mỗi tab workflow một cuộc trò chuyện riêng: AI chỉ đọc/sửa đúng tab đã ra lệnh ----------
+let curTab = "";
+const wfStore = () => app.extensionManager?.workflow;
+const newTabId = () => "t" + Math.random().toString(36).slice(2, 12);
+// Mã tab gắn vào chính tab đó (giữ khi đổi tên/lưu); sau khi tải lại trang thì nhận lại theo đường dẫn.
+const tabOf = (wf) => {
+  if (!wf) return "";
+  if (!wf.__lnlTab) wf.__lnlTab = state.tabMap[wf.path] || newTabId();
+  if (state.tabMap[wf.path] !== wf.__lnlTab) {
+    for (const [p, id] of Object.entries(state.tabMap)) if (id === wf.__lnlTab) delete state.tabMap[p];
+    state.tabMap[wf.path] = wf.__lnlTab;
+  }
+  return wf.__lnlTab;
+};
+const tabName = (wf) => wf?.filename || "Workflow";
+const findTab = (id) => (wfStore()?.openWorkflows || []).find((w) => tabOf(w) === id);
+const conv = () => {
+  let c = state.convs.find((x) => x.id === state.curByTab[curTab] && x.tab === curTab);
+  if (!c) c = state.convs.find((x) => x.tab === curTab);
+  // Bản cũ (chưa chia theo tab): cuộc trò chuyện đang mở thuộc về tab đầu tiên gặp.
+  if (!c) { c = state.convs.find((x) => !x.tab && x.id === state.cur); if (c) c.tab = curTab; }
+  if (!c) { c = newConv(state.agent); c.tab = curTab; state.convs.unshift(c); }
+  state.curByTab[curTab] = c.id;
+  return c;
+};
 let diskTimer = 0;
 const toDisk = () => fetch(api.apiURL("/lnl-ai/state"), { method: "POST", headers: H, body: JSON.stringify(state), keepalive: true }).catch(() => {});
 const save = () => {
   for (const c of state.convs) c.history = c.history.slice(-120);
-  state.convs = state.convs.slice(0, MAX_CONVS);
+  const live = new Set(Object.values(state.curByTab));
+  state.convs = state.convs.filter((c) => c.history.length || live.has(c.id)).slice(0, MAX_CONVS);
+  for (const [t, id] of Object.entries(state.curByTab)) if (!state.convs.some((c) => c.id === id)) delete state.curByTab[t];
   state.saved = Date.now();
   try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
   // Bản chính nằm trên ổ đĩa (user/lnl-ai/state.json): xoá dữ liệu trình duyệt hay đổi trình duyệt vẫn còn.
@@ -47,6 +73,7 @@ async function loadDisk() {
     // Lịch sử trong trình duyệt chưa từng lưu ra ổ đĩa thì giữ nó (đẩy lên), không để bản trên ổ đĩa đè.
     if (Array.isArray(d.convs) && d.convs.length && (state.saved ? (d.saved || 0) >= state.saved : !hasLocal)) {
       Object.assign(state, d);
+      state.tabMap = state.tabMap || {}; state.curByTab = state.curByTab || {};
       if (!state.convs.some((c) => c.id === state.cur)) state.cur = state.convs[0].id;
       try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
     } else if (hasLocal) { state.saved = state.saved || Date.now(); try { localStorage.setItem(LS, JSON.stringify(state)); } catch {} toDisk(); }
@@ -93,6 +120,8 @@ const CSS = `
 .lnl-head button{background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:5px}
 .lnl-head button:hover{background:#2a2a2a;color:#fff}
 .lnl-log{flex:1 1 auto;min-height:0;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+.lnl-view{display:flex;flex-direction:column;gap:10px}
+.lnl-hist p{margin:8px 4px 4px;font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.04em}
 .lnl-hint{opacity:.6;font-size:12px;line-height:1.5;padding:6px 2px}
 .lnl-msg{line-height:1.55;word-break:break-word}
 .lnl-msg.user{background:#24324a;border:1px solid #33496d;padding:8px 10px;border-radius:10px;white-space:pre-wrap;align-self:stretch}
@@ -208,25 +237,48 @@ function addImages(box, text) {
   }
 }
 
-// ---------- Canvas đang mở → server (MCP comfyui đọc được) ----------
-let lastCanvas = "";
+// ---------- Canvas từng tab → server (MCP comfyui chỉ đọc/ghi đúng tab đã ra lệnh) ----------
+const lastCanvas = new Map();
+const pendingLoad = new Map(); // tab đang ẩn: workflow AI gửi tới sẽ hiện khi bạn mở lại tab đó
 async function syncCanvas() {
   try {
-    if (!app.graph) return;
-    const ui = app.graph.serialize(); const s = JSON.stringify(ui);
-    if (s === lastCanvas) return;
-    lastCanvas = s;
-    let prompt = null;
-    try { prompt = (await app.graphToPrompt()).output; } catch {}
-    await fetch(api.apiURL("/lnl-ai/canvas"), { method: "POST", headers: H, body: JSON.stringify({ ui, api: prompt, at: Date.now() }) });
+    const ws = wfStore(); if (!app.graph) return;
+    const active = ws?.activeWorkflow;
+    const list = ws?.openWorkflows?.length ? ws.openWorkflows : [null];
+    for (const w of list) {
+      const isActive = !w || w === active;
+      const ui = isActive ? app.graph.serialize() : w.changeTracker?.activeState;
+      if (!ui) continue;
+      const tab = w ? tabOf(w) : "";
+      const s = (isActive ? "*" : "") + JSON.stringify(ui);
+      if (lastCanvas.get(tab) === s) continue;
+      let prompt = null;
+      if (isActive && !ws?.isBusy) { try { prompt = (await app.graphToPrompt()).output; } catch {} }
+      const r = await fetch(api.apiURL("/lnl-ai/canvas"), { method: "POST", headers: H,
+        body: JSON.stringify({ tab: tab || undefined, name: w ? tabName(w) : undefined, active: isActive, ui, api: prompt, at: Date.now() }) });
+      if (r.ok) lastCanvas.set(tab, s);
+    }
   } catch {}
 }
+async function loadInto(wf, d, target) {
+  if (Array.isArray(wf.nodes)) await app.loadGraphData(wf, true, true, target || d.name);
+  else await app.loadApiJson(wf, target || d.name);
+}
 api.addEventListener("lnl-ai.load", async (e) => {
-  const wf = e.detail?.workflow; if (!wf) return;
+  const d = e.detail || {}; const wf = d.workflow; if (!wf) return;
   try {
-    if (Array.isArray(wf.nodes)) await app.loadGraphData(wf, true, true, e.detail.name);
-    else await app.loadApiJson(wf, e.detail.name);
-    lastCanvas = ""; setTimeout(syncCanvas, 500);
+    const ws = wfStore(); const tab = d.tab || "";
+    const target = tab ? findTab(tab) : null;
+    if (target && target !== ws?.activeWorkflow) {
+      pendingLoad.set(tab, d);
+      const ui = Array.isArray(wf.nodes);
+      fetch(api.apiURL("/lnl-ai/canvas"), { method: "POST", headers: H, body: JSON.stringify({ tab, name: tabName(target), active: false, ui: ui ? wf : null, api: ui ? null : wf, pending: true, at: Date.now() }) }).catch(() => {});
+      return;
+    }
+    // Tab đúng đang mở → nạp vào chính tab đó (không mở tab mới). Tab đã bị đóng → mở tab mới, giữ cuộc trò chuyện.
+    await loadInto(wf, d, target);
+    if (tab && !target) { const a = wfStore()?.activeWorkflow; if (a) { a.__lnlTab = tab; tabOf(a); } }
+    lastCanvas.clear(); setTimeout(syncCanvas, 500);
   } catch (err) { console.error("[LNL AI] load", err); }
 });
 
@@ -340,30 +392,43 @@ function build() {
   window.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "l") { e.preventDefault(); e.stopPropagation(); setOpen(!state.open || document.activeElement !== ta); } }, true);
 
   // Cuộc trò chuyện
-  const scroll = () => { log.scrollTop = log.scrollHeight; };
-  const addMsg = (role, text) => {
+  // Mỗi cuộc trò chuyện có khung riêng: đổi tab không làm mất lượt AI đang chạy ở tab kia.
+  const views = new Map(), runs = new Map(), stat = new Map();
+  const isShown = (c) => !!c && log.firstChild === views.get(c.id);
+  const setStatus = (c, t) => { stat.set(c.id, t); if (isShown(c)) status.textContent = t; };
+  const scroll = (c) => { if (!c || isShown(c)) log.scrollTop = log.scrollHeight; };
+  const syncGo = () => { const r = runs.has(conv().id); go.textContent = r ? "■" : "↑"; go.title = r ? "Dừng" : "Gửi (Enter)"; go.classList.toggle("stop", r); };
+  const addMsg = (c, role, text) => {
     const m = el("div", "lnl-msg " + role);
-    if (role === "ai") { m.innerHTML = md(text); addImages(m, text); m.dataset.raw = text; m.title = "Nhấp đúp để chép"; m.ondblclick = () => { navigator.clipboard?.writeText(m.dataset.raw || m.innerText); status.textContent = "Đã chép câu trả lời"; }; } else m.textContent = text;
-    log.appendChild(m); scroll(); return m;
+    if (role === "ai") { m.innerHTML = md(text); addImages(m, text); m.dataset.raw = text; m.title = "Nhấp đúp để chép"; m.ondblclick = () => { navigator.clipboard?.writeText(m.dataset.raw || m.innerText); setStatus(c, "Đã chép câu trả lời"); }; } else m.textContent = text;
+    viewOf(c).appendChild(m); scroll(c); return m;
   };
-  const toolCard = (name, input, result, ok) => {
+  const toolCard = (c, name, input, result, ok) => {
     const d = el("details", "lnl-tool"); const s = el("summary");
     const arg = input ? (input.command || input.file_path || input.path || input.pattern || input.url || input.description || JSON.stringify(input)) : "";
     s.append(el("span", "n", name), el("span", "a", String(arg).slice(0, 160)), el("span", "s", ok == null ? "…" : ok ? "✓" : "✗"));
     d.appendChild(s);
     const pre = el("pre"); pre.textContent = JSON.stringify(input, null, 1) + (result ? "\n──\n" + result : ""); d.appendChild(pre);
-    log.appendChild(d); scroll(); return d;
+    viewOf(c).appendChild(d); scroll(c); return d;
   };
-  const show = () => {
-    const c = conv(); log.innerHTML = "";
-    title.textContent = c.title || "Cuộc trò chuyện mới";
+  function viewOf(c) {
+    let v = views.get(c.id); if (v) return v;
+    v = el("div", "lnl-view"); views.set(c.id, v);
     for (const h of c.history) {
-      if (h.role === "tool") { const d = toolCard(h.name || "công cụ", h.input || h.text, h.result, h.ok ?? true); if (h.imgs) { const b = el("div", "lnl-imgs"); addImages(b, h.imgs); log.insertBefore(b, d.nextSibling); } }
-      else addMsg(h.role, h.text);
+      if (h.role === "tool") { const d = toolCard(c, h.name || "công cụ", h.input || h.text, h.result, h.ok ?? true); if (h.imgs) { const b = el("div", "lnl-imgs"); addImages(b, h.imgs); v.insertBefore(b, d.nextSibling); } }
+      else addMsg(c, h.role, h.text);
     }
-    if (!c.history.length) log.appendChild(el("div", "lnl-hint", "Ra lệnh như Claude trong Cursor: tạo ảnh, dựng/sửa workflow trên canvas, cài model, sửa code… Dán hoặc kéo ảnh vào ô để gửi kèm; bấm ◎ để gửi kèm node đang chọn. Ctrl+L mở/đóng khung."));
-    status.textContent = c.sessions[state.agent] ? "Đang tiếp tục phiên trước" + ctxText(c) : c.carry ? "Phiên mới, mang theo bản tóm tắt" : "";
-    scroll();
+    if (!c.history.length) v.appendChild(el("div", "lnl-hint", "Mỗi tab workflow có cuộc trò chuyện riêng — AI chỉ đọc và sửa đúng tab này. Ra lệnh như Claude trong Cursor: tạo ảnh, dựng/sửa workflow, cài model… Dán hoặc kéo ảnh vào ô để gửi kèm; bấm ◎ để gửi kèm node đang chọn. Ctrl+L mở/đóng khung."));
+    return v;
+  }
+  const show = () => {
+    const c = conv(); const v = viewOf(c);
+    if (log.firstChild !== v) log.replaceChildren(v);
+    const w = findTab(curTab);
+    title.textContent = (w ? "📑 " + tabName(w) + " · " : "") + (c.title || "Cuộc trò chuyện mới");
+    title.title = title.textContent;
+    status.textContent = stat.get(c.id) ?? (c.sessions[state.agent] ? "Đang tiếp tục phiên trước" + ctxText(c) : c.carry ? "Phiên mới, mang theo bản tóm tắt" : "");
+    syncGo(); scroll(c);
   };
   const ctxText = (c) => {
     if (!c.ctx) return "";
@@ -372,17 +437,25 @@ function build() {
   };
   const renderHist = () => {
     hist.innerHTML = "";
-    for (const c of state.convs) {
-      const r = el("div", c.id === state.cur ? "cur" : "");
+    const cur = conv();
+    const row = (c) => {
+      const r = el("div", c.id === cur.id ? "cur" : "");
       const del = el("button", null, "🗑"); del.title = "Xoá";
-      r.append(el("span", null, c.title || "Cuộc trò chuyện mới"), el("small", null, new Date(c.at).toLocaleDateString("vi-VN")), del);
-      r.onclick = () => { if (running) return; state.cur = c.id; save(); hist.classList.remove("show"); show(); };
-      del.onclick = (e) => { e.stopPropagation(); if (running && c.id === state.cur) return; state.convs = state.convs.filter((x) => x !== c); if (!state.convs.length) state.convs.push(newConv(state.agent)); if (!state.convs.some((x) => x.id === state.cur)) state.cur = state.convs[0].id; save(); renderHist(); show(); };
+      r.append(el("span", null, (runs.has(c.id) ? "⏳ " : "") + (c.title || "Cuộc trò chuyện mới")), el("small", null, new Date(c.at).toLocaleDateString("vi-VN")), del);
+      r.onclick = () => {
+        if (c.tab !== curTab) { if (runs.has(c.id)) return; c.tab = curTab; } // chuyển cuộc trò chuyện cũ sang tab này
+        state.curByTab[curTab] = c.id; save(); hist.classList.remove("show"); show();
+      };
+      del.onclick = (e) => { e.stopPropagation(); if (runs.has(c.id)) return; state.convs = state.convs.filter((x) => x !== c); views.delete(c.id); stat.delete(c.id); save(); renderHist(); show(); };
       hist.appendChild(r);
-    }
+    };
+    hist.appendChild(el("p", null, "Tab này"));
+    state.convs.filter((c) => c.tab === curTab).forEach(row);
+    const other = state.convs.filter((c) => c.tab !== curTab && c.history.length);
+    if (other.length) { hist.appendChild(el("p", null, "Tab khác / đã đóng — bấm để chuyển sang tab này")); other.forEach(row); }
   };
   bHist.onclick = () => { if (!state.open) setOpen(true); renderHist(); hist.classList.toggle("show"); };
-  bNew.onclick = () => { if (running) return; if (!state.open) setOpen(true); const c = conv(); if (c.history.length) { const n = newConv(state.agent); state.convs.unshift(n); state.cur = n.id; } save(); hist.classList.remove("show"); show(); ta.focus(); };
+  bNew.onclick = () => { if (!state.open) setOpen(true); const c = conv(); if (c.history.length) { const n = newConv(state.agent); n.tab = curTab; state.convs.unshift(n); state.curByTab[curTab] = n.id; } save(); hist.classList.remove("show"); show(); ta.focus(); };
 
   // Ảnh đính kèm + node đang chọn
   let attached = [], withSel = false;
@@ -425,20 +498,24 @@ function build() {
   ta.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); run(); }
-    else if (e.key === "Escape" && running) { e.preventDefault(); run(); }
+    else if (e.key === "Escape" && runs.has(conv().id)) { e.preventDefault(); run(); }
   });
   for (const t of ["keyup", "keypress"]) ta.addEventListener(t, (e) => e.stopPropagation());
 
   // Gửi / nhận
-  let running = null;
   async function run(opts = {}) {
-    if (running) { status.textContent = "Đang dừng…"; await fetch(api.apiURL("/lnl-ai/stop"), { method: "POST", headers: H, body: JSON.stringify({ run_id: running }) }).catch(() => {}); return; }
+    const c = conv();
+    if (runs.has(c.id)) {
+      const id = runs.get(c.id); setStatus(c, "Đang dừng…");
+      if (id !== "pending") await fetch(api.apiURL("/lnl-ai/stop"), { method: "POST", headers: H, body: JSON.stringify({ run_id: id }) }).catch(() => {});
+      return;
+    }
     const compact = !!opts.compact;
     const text = compact ? COMPACT_PROMPT : ta.value.trim(); if (!text && !attached.length) return;
-    const c = conv(); const agent = state.agent; const who = agent === "codex" ? "Codex" : "Claude";
-    if (compact && !c.sessions[agent]) { status.textContent = "Chưa có gì để tóm gọn"; return; }
+    const agent = state.agent; const who = agent === "codex" ? "Codex" : "Claude";
+    if (compact && !c.sessions[agent]) { setStatus(c, "Chưa có gì để tóm gọn"); return; }
     askNotify();
-    if (!c.history.length) { log.innerHTML = ""; c.title = (text || "Ảnh").slice(0, 60); title.textContent = c.title; }
+    if (!c.history.length) { viewOf(c).querySelector(".lnl-hint")?.remove(); c.title = (text || "Ảnh").slice(0, 60); show(); }
     c.agent = agent; c.at = Date.now();
     state.convs = [c, ...state.convs.filter((x) => x !== c)];
     let message = text || "Xem ảnh đính kèm.";
@@ -448,19 +525,20 @@ function build() {
     if (sel.length) message += "\n\n[Node đang chọn trên canvas: " + sel.map((n) => `#${n.id} ${n.title} (${n.type})`).join("; ") + "]";
     const images = attached.map((a) => a.path);
     const shown = (compact ? "🗜 Tóm gọn cuộc trò chuyện" : text) + (attached.length ? `\n📎 ${attached.length} ảnh` : "") + (sel.length ? `\n◎ ${sel.length} node` : "");
-    addMsg("user", shown); c.history.push({ role: "user", text: shown });
+    addMsg(c, "user", shown); c.history.push({ role: "user", text: shown });
     if (!compact) { ta.value = ""; grow(); } attached = []; withSel = false; bSel.style.color = ""; drawChips(); save();
+    runs.set(c.id, "pending"); syncGo();
     await syncCanvas();
-    go.textContent = "■"; go.title = "Dừng"; go.classList.add("stop"); running = "pending";
-    let finished = false; const t0 = Date.now(); const tick = setInterval(() => { if (running && !finished) status.textContent = `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
-    status.textContent = who + " đang làm…";
+    const tabW = findTab(c.tab);
+    let finished = false; const t0 = Date.now(); const tick = setInterval(() => { if (runs.has(c.id) && !finished) setStatus(c, `${who} đang làm… ${Math.round((Date.now() - t0) / 1000)}s`); }, 1000);
+    setStatus(c, who + " đang làm…");
     let cur = null, curText = "", lastAI = "", ok = false; const cards = new Map();
     const flush = () => { if (cur && curText) { lastAI = curText; c.history.push({ role: "ai", text: curText }); cur.dataset.raw = curText; cur.innerHTML = md(curText); addImages(cur, curText); } cur = null; curText = ""; };
     let paint = 0;
     try {
       const res = await fetch(api.apiURL("/lnl-ai/chat"), { method: "POST", headers: H, body: JSON.stringify({
         agent, message, session_id: c.sessions[agent], mode: state.mode,
-        model: state.model[agent] || undefined, effort: state.effort[agent] || undefined, tools: state.tools, images }) });
+        model: state.model[agent] || undefined, effort: state.effort[agent] || undefined, tools: state.tools, images, tab: c.tab || undefined, tab_name: tabW ? tabName(tabW) : undefined }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -471,14 +549,14 @@ function build() {
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
           let ev; try { ev = JSON.parse(line); } catch { continue; }
-          if (ev.type === "lnl_run") running = ev.run_id;
+          if (ev.type === "lnl_run") runs.set(c.id, ev.run_id);
           else if (ev.type === "system" && ev.session_id) { c.sessions[agent] = ev.session_id; save(); }
           else if (ev.type === "stream_event") {
             const d = ev.event;
             if (d?.type === "content_block_delta" && d.delta?.type === "text_delta") {
-              if (!cur) cur = addMsg("ai", "");
+              if (!cur) cur = addMsg(c, "ai", "");
               curText += d.delta.text;
-              const now = Date.now(); if (now - paint > 80) { paint = now; cur.innerHTML = md(curText); scroll(); }
+              const now = Date.now(); if (now - paint > 80) { paint = now; cur.innerHTML = md(curText); scroll(c); }
             } else if (d?.type === "message_stop") flush();
           } else if (ev.type === "assistant") {
             const mu = ev.message?.usage;
@@ -487,10 +565,10 @@ function build() {
               if (b.type === "tool_use") {
                 flush();
                 const h = { role: "tool", name: b.name, input: b.input, ok: null };
-                c.history.push(h); cards.set(b.id, { card: toolCard(b.name, b.input, "", null), h });
+                c.history.push(h); cards.set(b.id, { card: toolCard(c, b.name, b.input, "", null), h });
               } else if (b.type === "text" && b.text && !cur && !curText && !c.history.some((x) => x.text === b.text)) {
                 // Codex / không có stream từng chữ: hiện cả đoạn
-                cur = addMsg("ai", b.text); curText = b.text; flush();
+                cur = addMsg(c, "ai", b.text); curText = b.text; flush();
               }
             }
           } else if (ev.type === "user") {
@@ -503,7 +581,7 @@ function build() {
                 it.card.querySelector(".s").textContent = b.is_error ? "✗" : "✓";
                 it.card.querySelector("pre").textContent = JSON.stringify(it.h.input, null, 1) + "\n──\n" + it.h.result;
                 const imgs = el("div", "lnl-imgs"); addImages(imgs, txt);
-                if (imgs.children.length) { it.h.imgs = txt.slice(0, 4000); log.insertBefore(imgs, it.card.nextSibling); scroll(); }
+                if (imgs.children.length) { it.h.imgs = txt.slice(0, 4000); it.card.parentNode.insertBefore(imgs, it.card.nextSibling); scroll(c); }
               }
             }
           } else if (ev.type === "result") {
@@ -511,13 +589,13 @@ function build() {
             if (ev.session_id) c.sessions[agent] = ev.session_id;
             const u = ev.usage || {}; const tok = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
             const model = Object.keys(ev.modelUsage || {})[0];
-            status.textContent = `Xong · ${Math.round((ev.duration_ms || 0) / 1000)}s` + (ev.num_turns ? ` · ${ev.num_turns} lượt` : "") + (tok ? ` · ${Math.round(tok / 1000)}k token vào, ${u.output_tokens || 0} ra` : "") + (model ? ` · ${model}` : "") + ctxText(c);
+            setStatus(c, `Xong · ${Math.round((ev.duration_ms || 0) / 1000)}s` + (ev.num_turns ? ` · ${ev.num_turns} lượt` : "") + (tok ? ` · ${Math.round(tok / 1000)}k token vào, ${u.output_tokens || 0} ra` : "") + (model ? ` · ${model}` : "") + ctxText(c));
             ok = !ev.is_error;
-            if (ev.is_error && ev.result) { addMsg("err", ev.result); c.history.push({ role: "err", text: ev.result }); }
-          } else if (ev.type === "lnl_error") { flush(); addMsg("err", ev.text); c.history.push({ role: "err", text: ev.text }); status.textContent = "Lỗi"; }
+            if (ev.is_error && ev.result) { addMsg(c, "err", ev.result); c.history.push({ role: "err", text: ev.result }); }
+          } else if (ev.type === "lnl_error") { flush(); addMsg(c, "err", ev.text); c.history.push({ role: "err", text: ev.text }); setStatus(c, "Lỗi"); }
         }
       }
-    } catch (err) { flush(); addMsg("err", String(err.message || err)); status.textContent = "Lỗi"; }
+    } catch (err) { flush(); addMsg(c, "err", String(err.message || err)); setStatus(c, "Lỗi"); }
     clearInterval(tick); flush();
     for (const { h } of cards.values()) if (h.ok == null) h.ok = false;
     if (ok && carry) delete c.carry;
@@ -525,20 +603,32 @@ function build() {
       // Phiên mới gọn nhẹ: bỏ phiên cũ, tin sau mang theo bản tóm tắt.
       const note = "— Đã tóm gọn. Tin tiếp theo bắt đầu phiên mới, mang theo bản tóm tắt ở trên. —";
       c.carry = lastAI.slice(0, 8000); c.sessions = {}; c.ctx = 0;
-      c.history.push({ role: "ai", text: note }); addMsg("ai", note);
-      status.textContent = "Đã tóm gọn — tin sau tốn ít token hơn";
+      c.history.push({ role: "ai", text: note }); addMsg(c, "ai", note);
+      setStatus(c, "Đã tóm gọn — tin sau tốn ít token hơn");
     }
-    save(); running = null; go.textContent = "↑"; go.title = "Gửi (Enter)"; go.classList.remove("stop");
-    if (/đang làm|Đang dừng/.test(status.textContent)) status.textContent = "Đã dừng";
-    else notify(ok ? who + " đã xong" : who + " dừng vì lỗi", (lastAI || status.textContent).replace(/[#*`>]/g, "").slice(0, 160));
+    save(); runs.delete(c.id); syncGo();
+    const st = stat.get(c.id) || "";
+    const where = tabW ? " · tab " + tabName(tabW) : "";
+    if (/đang làm|Đang dừng/.test(st)) setStatus(c, "Đã dừng");
+    else notify((ok ? who + " đã xong" : who + " dừng vì lỗi") + where, (lastAI || st).replace(/[#*`>]/g, "").slice(0, 160));
   }
   go.onclick = () => run();
-  bCompact.onclick = () => { if (!state.open) setOpen(true); if (!running) run({ compact: true }); };
+  bCompact.onclick = () => { if (!state.open) setOpen(true); if (!runs.has(conv().id)) run({ compact: true }); };
   bBell.onclick = () => { state.notify = state.notify === false; bBell.classList.toggle("on", state.notify); if (state.notify) askNotify(); save(); status.textContent = state.notify ? "Sẽ báo khi xong (khi bạn ở cửa sổ khác)" : "Đã tắt báo khi xong"; };
   // Workflow ComfyUI chạy xong / lỗi cũng báo
   api.addEventListener("execution_success", () => notify("ComfyUI đã tạo xong", "Workflow vừa chạy xong — mở để xem kết quả."));
   api.addEventListener("execution_error", (e) => notify("ComfyUI bị lỗi", String(e?.detail?.exception_message || "Workflow dừng vì lỗi").slice(0, 160)));
 
+  // Đổi tab workflow → đổi sang cuộc trò chuyện của tab đó (lượt AI ở tab cũ vẫn chạy tiếp).
+  const watchTab = async () => {
+    const a = wfStore()?.activeWorkflow; const t = a ? tabOf(a) : "";
+    if (t === curTab) return;
+    curTab = t; hist.classList.remove("show"); show();
+    const d = pendingLoad.get(t);
+    if (d && a) { pendingLoad.delete(t); try { await loadInto(d.workflow, d, a); lastCanvas.clear(); setTimeout(syncCanvas, 500); setStatus(conv(), "Đã nạp workflow AI sửa khi bạn ở tab khác"); } catch (err) { console.error("[LNL AI] load", err); } }
+  };
+  setInterval(watchTab, 400);
+  { const a = wfStore()?.activeWorkflow; curTab = a ? tabOf(a) : ""; }
   show(); grow(); relayout();
   if (state.open) setTimeout(() => ta.focus(), 300);
   return true;

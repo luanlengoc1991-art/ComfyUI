@@ -9,6 +9,8 @@ import readline from 'node:readline';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.COMFYUI_ROOT || path.resolve(HERE, '..');
 const URL_BASE = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
+// Khung AI trong ComfyUI chạy mỗi tab một phiên: công cụ canvas chỉ đọc/ghi đúng tab đó.
+const TAB = /^[A-Za-z0-9]{1,24}$/.test(process.env.LNL_AI_TAB || '') ? process.env.LNL_AI_TAB : '';
 const EXE = path.join(ROOT, 'ComfyUI.exe');
 const OUT = path.join(ROOT, 'output');
 
@@ -191,12 +193,12 @@ async function callTool(name, a = {}) {
     return { text: JSON.stringify({ files: r.files, seconds: r.seconds, seed, checkpoint: ckpt }, null, 2), extra };
   }
   if (name === 'comfyui_get_canvas') {
-    const c = await api('/lnl-ai/canvas', { headers: { 'X-LNL-AI': '1' } });
+    const c = await api('/lnl-ai/canvas' + (TAB ? '?tab=' + TAB : ''), { headers: { 'X-LNL-AI': '1' } });
     return { text: JSON.stringify(a.include_ui ? c : { api: c.api, nodes: c.ui?.nodes?.length, at: c.at }, null, 2) };
   }
   if (name === 'comfyui_load_canvas') {
     if (!a.workflow || typeof a.workflow !== 'object') throw new Error('Thiếu workflow');
-    const r = await api('/lnl-ai/canvas/load', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-LNL-AI': '1' }, body: JSON.stringify({ workflow: a.workflow, name: a.name }) });
+    const r = await api('/lnl-ai/canvas/load', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-LNL-AI': '1' }, body: JSON.stringify({ workflow: a.workflow, name: a.name, tab: TAB || undefined }) });
     return { text: r.clients ? 'Đã đưa workflow lên canvas.' : 'Chưa có cửa sổ ComfyUI nào đang mở để hiện workflow.' };
   }
   if (name === 'comfyui_run_workflow') {
