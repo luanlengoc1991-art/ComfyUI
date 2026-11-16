@@ -1,0 +1,198 @@
+{
+  "ck": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+    },
+    "_meta": {
+      "title": "Model ảnh chân thực"
+    }
+  },
+  "pos": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "luxury apartment living room, warm evening light, realistic interior photo, depth of field, 4k",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Mô tả ảnh (tiếng Anh)"
+    }
+  },
+  "neg": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Không muốn có"
+    }
+  },
+  "img": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "lnl-mau-nhanvat.jpg"
+    },
+    "_meta": {
+      "title": "Ảnh nhân vật"
+    }
+  },
+  "size": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "img",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Kích thước ảnh gốc"
+    }
+  },
+  "lat": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Khung nền mới"
+    }
+  },
+  "ks": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 7,
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "ck",
+        0
+      ],
+      "positive": [
+        "pos",
+        0
+      ],
+      "negative": [
+        "neg",
+        0
+      ],
+      "latent_image": [
+        "lat",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tạo ảnh"
+    }
+  },
+  "dec": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "ks",
+        0
+      ],
+      "vae": [
+        "ck",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Nền mới"
+    }
+  },
+  "fit": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "dec",
+        0
+      ],
+      "upscale_method": "bicubic",
+      "width": [
+        "size",
+        0
+      ],
+      "height": [
+        "size",
+        1
+      ],
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "Khớp cỡ nền với ảnh gốc"
+    }
+  },
+  "bgm": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "birefnet.safetensors"
+    },
+    "_meta": {
+      "title": "Model xoá nền (BiRefNet)"
+    }
+  },
+  "rm": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "bgm",
+        0
+      ],
+      "image": [
+        "img",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tách nhân vật"
+    }
+  },
+  "comp": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "fit",
+        0
+      ],
+      "source": [
+        "img",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "rm",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Đặt nhân vật lên nền mới"
+    }
+  },
+  "save": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "lnl/doi-nen",
+      "images": [
+        "comp",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Lưu ảnh đổi nền"
+    }
+  }
+}

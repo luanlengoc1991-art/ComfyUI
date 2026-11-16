@@ -58,3 +58,7 @@ git fetch upstream; git merge upstream/master; git push
 - Ô trên cùng chọn AI: **Claude Code (tài khoản Claude)** hoặc **Codex (tài khoản ChatGPT)**. Cả hai chỉ chạy bằng đăng nhập của máy (hạn mức gói tháng); khung tự bỏ `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` để không tính tiền theo token. Mỗi AI nhớ phiên riêng; tiếp tục phiên giúp tận dụng cache, tốn ít token hơn.
 - Khung tự mở khi vào app; biểu tượng có chữ "AI". Tắt tự mở: `localStorage.setItem("lnl-ai-autoopen","0")`.
 - Yêu cầu: đã cài Claude Code (`claude`), với Codex thì `npm i -g @openai/codex` (đăng nhập ChatGPT trong `~/.codex`), và đăng ký MCP `comfyui` (mục ở trên).
+
+## Bộ workflow tiếng Việt
+- `lnl-workflows/`: tạo ảnh chân thực, xoá nền, đổi nền, phóng to 4x, tạo theo bố cục (ControlNet). Xem `lnl-workflows/README.md`.
+- Model nằm ở `C:\LNL-AI-Models\ComfyUI-models` (SSD), `models` là junction trỏ tới đó: lần nạp đầu 343 s → 51 s.

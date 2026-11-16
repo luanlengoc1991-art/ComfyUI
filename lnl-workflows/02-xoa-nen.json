@@ -1,0 +1,77 @@
+{
+  "img": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "lnl-mau-nhanvat.jpg"
+    },
+    "_meta": {
+      "title": "Ảnh cần xoá nền"
+    }
+  },
+  "bgm": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "birefnet.safetensors"
+    },
+    "_meta": {
+      "title": "Model xoá nền (BiRefNet)"
+    }
+  },
+  "rm": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "bgm",
+        0
+      ],
+      "image": [
+        "img",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tách chủ thể"
+    }
+  },
+  "inv": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "rm",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Đảo vùng chọn"
+    }
+  },
+  "join": {
+    "class_type": "JoinImageWithAlpha",
+    "inputs": {
+      "image": [
+        "img",
+        0
+      ],
+      "alpha": [
+        "inv",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Ghép nền trong suốt"
+    }
+  },
+  "save": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "lnl/xoa-nen",
+      "images": [
+        "join",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Lưu PNG nền trong suốt"
+    }
+  }
+}

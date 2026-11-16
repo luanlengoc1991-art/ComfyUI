@@ -1,0 +1,195 @@
+{
+  "ck": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+    },
+    "_meta": {
+      "title": "Model ảnh chân thực"
+    }
+  },
+  "pos": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "photo of a young asian woman in elegant white dress, sunny garden, realistic skin, 4k",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Mô tả ảnh (tiếng Anh)"
+    }
+  },
+  "neg": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Không muốn có"
+    }
+  },
+  "img": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "lnl-mau-nhanvat.jpg"
+    },
+    "_meta": {
+      "title": "Ảnh mẫu bố cục / tư thế"
+    }
+  },
+  "sm": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "img",
+        0
+      ],
+      "upscale_method": "bicubic",
+      "width": 832,
+      "height": 1216,
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "Thu nhỏ ảnh mẫu"
+    }
+  },
+  "edge": {
+    "class_type": "Canny",
+    "inputs": {
+      "image": [
+        "sm",
+        0
+      ],
+      "low_threshold": 0.3,
+      "high_threshold": 0.7
+    },
+    "_meta": {
+      "title": "Lấy nét viền"
+    }
+  },
+  "cn": {
+    "class_type": "ControlNetLoader",
+    "inputs": {
+      "control_net_name": "controlnet-union-sdxl-promax.safetensors"
+    },
+    "_meta": {
+      "title": "ControlNet Union SDXL"
+    }
+  },
+  "cnt": {
+    "class_type": "SetUnionControlNetType",
+    "inputs": {
+      "control_net": [
+        "cn",
+        0
+      ],
+      "type": "canny/lineart/anime_lineart/mlsd"
+    },
+    "_meta": {
+      "title": "Kiểu điều khiển"
+    }
+  },
+  "apply": {
+    "class_type": "ControlNetApplyAdvanced",
+    "inputs": {
+      "positive": [
+        "pos",
+        0
+      ],
+      "negative": [
+        "neg",
+        0
+      ],
+      "control_net": [
+        "cnt",
+        0
+      ],
+      "image": [
+        "edge",
+        0
+      ],
+      "strength": 0.6,
+      "start_percent": 0,
+      "end_percent": 0.8
+    },
+    "_meta": {
+      "title": "Bám bố cục ảnh mẫu"
+    }
+  },
+  "lat": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Khung ảnh 9:16"
+    }
+  },
+  "ks": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 7,
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "ck",
+        0
+      ],
+      "positive": [
+        "apply",
+        0
+      ],
+      "negative": [
+        "apply",
+        1
+      ],
+      "latent_image": [
+        "lat",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tạo ảnh"
+    }
+  },
+  "dec": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "ks",
+        0
+      ],
+      "vae": [
+        "ck",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Giải mã ảnh"
+    }
+  },
+  "save": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "lnl/theo-bo-cuc",
+      "images": [
+        "dec",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Lưu ảnh"
+    }
+  }
+}

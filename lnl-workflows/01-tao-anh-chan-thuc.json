@@ -1,0 +1,107 @@
+{
+  "ck": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+    },
+    "_meta": {
+      "title": "Model ảnh chân thực"
+    }
+  },
+  "pos": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "photo of a young asian woman in a modern cafe, natural light, realistic skin, 85mm, sharp focus, 4k",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Mô tả ảnh (tiếng Anh)"
+    }
+  },
+  "neg": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, lowres, deformed, extra fingers, text, watermark, logo, plastic skin, cartoon",
+      "clip": [
+        "ck",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Không muốn có"
+    }
+  },
+  "lat": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Khung ảnh 9:16"
+    }
+  },
+  "ks": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 7,
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "ck",
+        0
+      ],
+      "positive": [
+        "pos",
+        0
+      ],
+      "negative": [
+        "neg",
+        0
+      ],
+      "latent_image": [
+        "lat",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tạo ảnh"
+    }
+  },
+  "dec": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "ks",
+        0
+      ],
+      "vae": [
+        "ck",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Giải mã ảnh"
+    }
+  },
+  "save": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "lnl/tao-anh",
+      "images": [
+        "dec",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Lưu ảnh"
+    }
+  }
+}

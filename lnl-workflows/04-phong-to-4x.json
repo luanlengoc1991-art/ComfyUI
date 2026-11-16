@@ -1,0 +1,64 @@
+{
+  "img": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "lnl-mau-nhanvat.jpg"
+    },
+    "_meta": {
+      "title": "Ảnh cần phóng to"
+    }
+  },
+  "um": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "RealESRGAN_x4plus.safetensors"
+    },
+    "_meta": {
+      "title": "Model phóng to 4x (Real-ESRGAN)"
+    }
+  },
+  "cap": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": [
+        "img",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 2,
+      "resolution_steps": 1
+    },
+    "_meta": {
+      "title": "Giới hạn ảnh vào ~2MP (ảnh quá to sẽ rất chậm)"
+    }
+  },
+  "up": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "um",
+        0
+      ],
+      "image": [
+        "cap",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Phóng to 4 lần"
+    }
+  },
+  "save": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "lnl/phong-to",
+      "images": [
+        "up",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Lưu ảnh nét"
+    }
+  }
+}
