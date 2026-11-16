@@ -405,6 +405,9 @@ async def chat(request):
             args += ["--sandbox", "read-only"]
         else:
             args += ["--sandbox", "workspace-write"]  # Codex 0.169 bỏ --full-auto
+        if mode != "plan":
+            # Chạy nền không có ai bấm duyệt: cho phép sẵn các tool ComfyUI (chỉ server comfyui).
+            args += ["-c", "mcp_servers.comfyui.default_tools_approval_mode=\"approve\""]
         if model:
             args += ["-m", model]
         if effort:
