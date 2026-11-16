@@ -120,6 +120,75 @@ async def info(request):
     return web.json_response({"claude": _claude_exe(), "codex": _codex_exe(), "root": COMFY_ROOT, "running": len(RUNS)})
 
 
+CLAUDE_MODELS = [
+    {"id": "", "name": "Mặc định của Claude Code"},
+    {"id": "claude-fable-5-2", "name": "Claude Fable 5.2"},
+    {"id": "claude-opus-5-5", "name": "Claude Opus 5.5"},
+    {"id": "claude-sonnet-5-5", "name": "Claude Sonnet 5.5"},
+    {"id": "claude-haiku-5-5", "name": "Claude Haiku 5.5"},
+]
+CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
+UPLOAD_DIR = os.path.join(COMFY_ROOT, "input", "lnl-ai")
+IMG_EXT = {"png", "jpg", "jpeg", "webp", "gif"}
+
+
+def _codex_models():
+    """Danh sách model Codex lấy từ bộ nhớ đệm của Codex CLI (~/.codex/models_cache.json)."""
+    path = os.path.join(os.path.expanduser("~"), ".codex", "models_cache.json")
+    out = [{"id": "", "name": "Mặc định của Codex", "efforts": []}]
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        for m in data.get("models", []):
+            if m.get("visibility") != "list" or not m.get("slug"):
+                continue
+            efforts = [e.get("effort") for e in m.get("supported_reasoning_levels", []) if e.get("effort")]
+            out.append({"id": m["slug"], "name": m.get("display_name") or m["slug"], "efforts": efforts,
+                        "default_effort": m.get("default_reasoning_level")})
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+@routes.get("/lnl-ai/models")
+async def models(request):
+    _guard(request)
+    claude = [dict(m, efforts=CLAUDE_EFFORTS) for m in CLAUDE_MODELS]
+    return web.json_response({"claude": claude, "codex": _codex_models(),
+                              "have": {"claude": bool(_claude_exe()), "codex": bool(_codex_exe())}})
+
+
+@routes.post("/lnl-ai/upload")
+async def upload(request):
+    """Ảnh dán/kéo vào khung chat: lưu vào input/lnl-ai để AI đọc được và node LoadImage dùng được."""
+    _guard(request)
+    reader = await request.multipart()
+    part = await reader.next()
+    if part is None or part.name != "file":
+        return web.json_response({"error": "Thiếu file"}, status=400)
+    name = os.path.basename(part.filename or "anh.png")
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+    if ext not in IMG_EXT:
+        return web.json_response({"error": "Chỉ nhận ảnh png/jpg/webp/gif"}, status=400)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    fname = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6] + "." + ext
+    full = os.path.join(UPLOAD_DIR, fname)
+    size = 0
+    with open(full, "wb") as f:
+        while True:
+            chunk = await part.read_chunk(1 << 16)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > 30 * 1024 * 1024:
+                f.close()
+                os.remove(full)
+                return web.json_response({"error": "Ảnh quá lớn (tối đa 30 MB)"}, status=413)
+            f.write(chunk)
+    return web.json_response({"path": full, "name": "lnl-ai/" + fname})
+
+
 @routes.post("/lnl-ai/canvas")
 async def save_canvas(request):
     _guard(request)
@@ -173,6 +242,11 @@ async def chat(request):
     model = body.get("model")
     model = model if isinstance(model, str) and model.replace("-", "").replace(".", "").isalnum() else None
     mode = body.get("mode") if body.get("mode") in MODES else "auto"
+    effort = body.get("effort") if body.get("effort") in EFFORTS else None
+    images = [p for p in (body.get("images") or []) if isinstance(p, str)
+              and os.path.abspath(p).startswith(os.path.abspath(UPLOAD_DIR) + os.sep) and os.path.isfile(p)][:8]
+    if images:
+        message += "\n\n[Ảnh đính kèm — đọc bằng công cụ Read:]\n" + "\n".join(images)
 
     if agent == "claude":
         exe = _claude_exe()
@@ -184,6 +258,8 @@ async def chat(request):
             args += ["--resume", sid]
         if model:
             args += ["--model", model]
+        if effort in CLAUDE_EFFORTS:
+            args += ["--effort", effort]
     else:
         exe = _codex_exe()
         if not exe:
@@ -197,6 +273,10 @@ async def chat(request):
             args += ["--full-auto"]
         if model:
             args += ["-m", model]
+        if effort:
+            args += ["-c", f"model_reasoning_effort={effort}"]
+        for p in images:
+            args += [f"--image={p}"]  # dạng "=" để "-" (stdin) phía sau không bị coi là ảnh
         if sid:
             args += ["resume", sid]
         else:
